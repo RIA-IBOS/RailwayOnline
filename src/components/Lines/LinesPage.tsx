@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronDown } from 'lucide-react';
 import type { ParsedLine, BureausConfig } from '@/types';
 import { fetchRailwayData, parseRailwayData, fetchBureausConfig, getBureauName } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
@@ -90,9 +91,7 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
             onClick={onBack}
             className="p-2 hover:bg-gray-100 rounded-lg"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <h1 className="text-lg font-bold">线路列表</h1>
 
@@ -209,14 +208,9 @@ function LineCard({ line, onSelect }: { line: ParsedLine; onSelect?: (line: Pars
         </div>
 
         {/* 展开/收起图标 */}
-        <svg
+        <ChevronDown
           className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        />
       </button>
 
       {/* 展开内容 */}

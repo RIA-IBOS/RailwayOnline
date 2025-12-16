@@ -3,6 +3,7 @@
  * 展示选中站点或地标的详细信息及附近信息
  */
 
+import { X, Train, Home } from 'lucide-react';
 import type { ParsedStation, Coordinate, ParsedLine } from '@/types';
 import type { ParsedLandmark, LandmarkCoord } from '@/lib/landmarkParser';
 
@@ -77,13 +78,9 @@ export function PointDetailCard({
         <div className="text-white">
           <div className="flex items-center gap-2">
             {isStation ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5M5 12h14M8 5h8M8 19h8M6 5v14M18 5v14" />
-              </svg>
+              <Train className="w-4 h-4" />
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              </svg>
+              <Home className="w-4 h-4" />
             )}
             <h3 className="font-bold">
               {isStation ? selectedPoint.name : `#${selectedPoint.landmark?.id} ${selectedPoint.name}`}
@@ -97,9 +94,7 @@ export function PointDetailCard({
           onClick={onClose}
           className="text-white/80 hover:text-white p-1"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="w-5 h-5" />
         </button>
       </div>
 
@@ -140,9 +135,7 @@ export function PointDetailCard({
         {nearbyStations.length > 0 && (
           <div className="px-4 py-3 border-b">
             <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5M5 12h14M8 5h8M8 19h8M6 5v14M18 5v14" />
-              </svg>
+              <Train className="w-3 h-3" />
               附近站点
             </div>
             <div className="space-y-1">
@@ -166,9 +159,7 @@ export function PointDetailCard({
         {nearbyLandmarks.length > 0 && (
           <div className="px-4 py-3">
             <div className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              </svg>
+              <Home className="w-3 h-3" />
               附近地标
             </div>
             <div className="space-y-1">

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { Search as SearchIcon, Train, Home, Route } from 'lucide-react';
 import type { ParsedStation, ParsedLine } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 
@@ -134,9 +135,7 @@ export function SearchBar({ stations, landmarks, lines, onSelect, onLineSelect }
     <div ref={containerRef} className="relative">
       <div className="flex items-center bg-white rounded-lg shadow-lg">
         <span className="pl-3 text-gray-400">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <SearchIcon className="w-5 h-5" />
         </span>
         <input
           ref={inputRef}
@@ -162,14 +161,16 @@ export function SearchBar({ stations, landmarks, lines, onSelect, onLineSelect }
               onClick={() => handleSelect(result)}
             >
               {/* 图标 */}
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center ${
                 result.type === 'station'
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-blue-500 text-white'
                   : result.type === 'line'
-                  ? 'bg-orange-100 text-orange-700'
-                  : 'bg-green-100 text-green-700'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-green-500 text-white'
               }`}>
-                {result.type === 'station' ? '站' : result.type === 'line' ? '线' : '标'}
+                {result.type === 'station' && <Train className="w-3.5 h-3.5" />}
+                {result.type === 'line' && <Route className="w-3.5 h-3.5" />}
+                {result.type === 'landmark' && <Home className="w-3.5 h-3.5" />}
               </span>
 
               {/* 名称和额外信息 */}

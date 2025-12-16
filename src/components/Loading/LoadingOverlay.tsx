@@ -3,6 +3,7 @@
  * 显示数据加载进度
  */
 
+import { Check, X, Loader2 } from 'lucide-react';
 import { useLoadingStore } from '@/store/loadingStore';
 
 export function LoadingOverlay() {
@@ -44,22 +45,18 @@ export function LoadingOverlay() {
               className="flex items-center gap-2 text-sm"
             >
               {/* 状态图标 */}
-              <div className="w-5 h-5 flex-shrink-0">
+              <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
                 {stage.status === 'pending' && (
                   <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                 )}
                 {stage.status === 'loading' && (
-                  <div className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                  <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
                 )}
                 {stage.status === 'success' && (
-                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check className="w-5 h-5 text-green-500" />
                 )}
                 {stage.status === 'error' && (
-                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-5 h-5 text-red-500" />
                 )}
               </div>
 

@@ -5,6 +5,7 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { X, ArrowUpDown, Train, Home, Footprints } from 'lucide-react';
 import type { ParsedStation, ParsedLine, Coordinate } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 import { buildRailwayGraph, findShortestPath, simplifyPath, PathResult } from '@/lib/pathfinding';
@@ -126,19 +127,15 @@ function PointSearchInput({ value, onChange, items, placeholder, label }: PointS
               onClick={() => handleSelect(item)}
             >
               {/* 类型图标 */}
-              {item.type === 'station' ? (
-                <span className="text-blue-500">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="3" strokeWidth={2} />
-                  </svg>
-                </span>
-              ) : (
-                <span className="text-orange-500">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                  </svg>
-                </span>
-              )}
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                item.type === 'station' ? 'bg-blue-500 text-white' : 'bg-orange-500 text-white'
+              }`}>
+                {item.type === 'station' ? (
+                  <Train className="w-3 h-3" />
+                ) : (
+                  <Home className="w-3 h-3" />
+                )}
+              </span>
               <span>{item.name}</span>
               <span className="text-xs text-gray-400 ml-auto">
                 {item.type === 'station' ? '站点' : '地标'}
@@ -397,9 +394,7 @@ export function NavigationPanel({
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="w-5 h-5" />
         </button>
       </div>
 
@@ -420,9 +415,7 @@ export function NavigationPanel({
             className="mt-6 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
             title="交换起终点"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-            </svg>
+            <ArrowUpDown className="w-4 h-4" />
           </button>
         </div>
 
@@ -483,10 +476,8 @@ export function NavigationPanel({
                 {result.walkStart && (
                   <div className="relative pl-5">
                     <div className="absolute left-[7px] top-0 bottom-0 w-0.5 bg-gray-300 border-dashed" style={{ borderLeft: '2px dashed #ccc', width: 0 }} />
-                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-green-500 text-white text-[10px] flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
-                      </svg>
+                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-green-500 text-white flex items-center justify-center">
+                      <Footprints className="w-2.5 h-2.5" />
                     </div>
                     <div className="bg-green-50 rounded p-2">
                       <div className="text-[10px] text-green-600 font-medium mb-0.5">
@@ -566,10 +557,8 @@ export function NavigationPanel({
                 {/* 终点步行 */}
                 {result.walkEnd && (
                   <div className="relative pl-5">
-                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
-                      </svg>
+                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center">
+                      <Footprints className="w-2.5 h-2.5" />
                     </div>
                     <div className="bg-red-50 rounded p-2">
                       <div className="text-[10px] text-red-600 font-medium mb-0.5">
