@@ -10,10 +10,14 @@ import { fetchPlayers } from '@/lib/playerApi';
 import { DynmapProjection } from '@/lib/DynmapProjection';
 
 /**
- * 获取玩家头像 URL (从 LittleSkin)
+ * 获取玩家头像 URL (从 Dynmap)
+ * 格式: https://satellite.ria.red/map/_eden/tiles/faces/{size}x{size}/{playerName}.png
+ * 支持的尺寸: 16x16, 32x32
  */
 function getPlayerAvatarUrl(playerName: string, size: number = 32): string {
-  return `https://littleskin.cn/avatar/player/${encodeURIComponent(playerName)}?size=${size}`;
+  // Dynmap 只支持 16x16 和 32x32，选择最接近的
+  const tileSize = size <= 16 ? 16 : 32;
+  return `https://satellite.ria.red/map/_eden/tiles/faces/${tileSize}x${tileSize}/${encodeURIComponent(playerName)}.png`;
 }
 
 /**

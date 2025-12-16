@@ -554,6 +554,23 @@ function MapContainer() {
             <span>清除路径</span>
           </button>
         )}
+
+        {/* 玩家列表面板 - 在左侧面板内显示 */}
+        {showPlayersPage && (
+          <PlayersList
+            worldId={currentWorld}
+            onClose={() => setShowPlayersPage(false)}
+            onPlayerSelect={(player) => {
+              setShowPlayersPage(false);
+              handlePlayerClick(player);
+            }}
+            onNavigateToPlayer={() => {
+              setShowPlayersPage(false);
+              // 打开导航面板
+              setShowNavigation(true);
+            }}
+          />
+        )}
       </div>
 
       {/* 右上角图层控制 */}
@@ -595,23 +612,6 @@ function MapContainer() {
           onLineSelect={(line) => {
             setShowLinesPage(false);
             handleLineSelect(line);
-          }}
-        />
-      )}
-
-      {/* 玩家列表页面 */}
-      {showPlayersPage && (
-        <PlayersList
-          worldId={currentWorld}
-          onBack={() => setShowPlayersPage(false)}
-          onPlayerSelect={(player) => {
-            setShowPlayersPage(false);
-            handlePlayerClick(player);
-          }}
-          onNavigateToPlayer={() => {
-            setShowPlayersPage(false);
-            // 打开导航面板
-            setShowNavigation(true);
           }}
         />
       )}
