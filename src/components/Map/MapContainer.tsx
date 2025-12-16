@@ -346,24 +346,24 @@ function MapContainer() {
       {/* 地图容器 */}
       <div ref={mapRef} className="w-full h-full" />
 
-      {/* 铁路图层 - 有路径规划时隐藏 */}
+      {/* 铁路图层 - 有路径规划结果时隐藏 */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
         <RailwayLayer
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showRailway && !(routePath && routePath.length > 0)}
+          visible={showRailway && !routePath}
           onStationClick={handleStationClick}
         />
       )}
 
-      {/* 地标图层 - 有路径规划时隐藏 */}
+      {/* 地标图层 - 有路径规划结果时隐藏 */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
         <LandmarkLayer
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showLandmark && !(routePath && routePath.length > 0)}
+          visible={showLandmark && !routePath}
           onLandmarkClick={handleLandmarkClick}
         />
       )}
