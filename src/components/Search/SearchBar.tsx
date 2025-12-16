@@ -147,7 +147,7 @@ export function SearchBar({ stations, landmarks, lines, onSelect, onLineSelect }
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="搜索线路、站点或地标..."
-          className="w-64 px-3 py-2 text-sm outline-none rounded-r-lg"
+          className="flex-1 w-full sm:w-64 px-3 py-2 text-sm outline-none rounded-r-lg"
         />
       </div>
 

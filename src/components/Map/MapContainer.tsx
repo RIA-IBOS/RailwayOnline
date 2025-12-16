@@ -342,8 +342,8 @@ function MapContainer() {
       attributionControl: true
     });
 
-    // 添加缩放控件到右下角
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    // 添加缩放控件 - 桌面端右下角，手机端左下角（通过 CSS 媒体查询在 index.css 处理）
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
     // 添加 Dynmap 瓦片图层
     const tileLayer = createDynmapTileLayer('zth', 'flat');
@@ -440,10 +440,10 @@ function MapContainer() {
       )}
 
       {/* 左侧面板区域 */}
-      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 max-w-[300px]">
+      <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-auto z-[1000] flex flex-col gap-2 sm:max-w-[300px]">
         {/* 标题和世界切换 */}
-        <div className="bg-white/90 px-4 py-2 rounded-lg shadow-lg">
-          <h1 className="text-lg font-bold text-gray-800">RIA 铁路在线地图</h1>
+        <div className="bg-white/90 px-3 py-2 sm:px-4 rounded-lg shadow-lg">
+          <h1 className="text-base sm:text-lg font-bold text-gray-800">RIA 铁路在线地图</h1>
           <WorldSwitcher
             worlds={WORLDS}
             currentWorld={currentWorld}
@@ -574,8 +574,8 @@ function MapContainer() {
         )}
       </div>
 
-      {/* 右上角图层控制 */}
-      <div className="absolute top-4 right-4 z-[1000]">
+      {/* 右侧图层控制 - 手机端右下角版权上方，桌面端右上角 */}
+      <div className="absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-4 z-[1000]">
         <LayerControl
           showRailway={showRailway}
           showLandmark={showLandmark}

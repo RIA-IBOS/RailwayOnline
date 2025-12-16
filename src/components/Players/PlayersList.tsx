@@ -43,7 +43,7 @@ export function PlayersList({
   }, [loadPlayers]);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-72 max-h-[50vh] flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[50vh] flex flex-col">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <div className="flex items-center gap-2">

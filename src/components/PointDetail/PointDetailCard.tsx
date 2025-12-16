@@ -68,7 +68,7 @@ export function PointDetailCard({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-72 max-h-[60vh] flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] flex flex-col">
       {/* 头部 */}
       <div
         className={`px-4 py-3 rounded-t-lg flex items-center justify-between ${
