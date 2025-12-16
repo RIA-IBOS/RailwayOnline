@@ -12,6 +12,7 @@ import { SearchBar } from '../Search/SearchBar';
 import { NavigationPanel } from '../Navigation/NavigationPanel';
 import { LineDetailCard } from '../LineDetail/LineDetailCard';
 import { Toolbar, LayerControl } from '../Toolbar/Toolbar';
+import { LinesPage } from '../Lines/LinesPage';
 import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
@@ -39,19 +40,33 @@ function MapContainer() {
   const [currentWorld, setCurrentWorld] = useState('zth');
   const [showRailway, setShowRailway] = useState(true);
   const [showLandmark, setShowLandmark] = useState(true);
+  const [dimBackground, setDimBackground] = useState(false);
   const [showNavigation, setShowNavigation] = useState(false);
+  const [showLinesPage, setShowLinesPage] = useState(false);
   const [stations, setStations] = useState<ParsedStation[]>([]);
   const [lines, setLines] = useState<ParsedLine[]>([]);
   const [landmarks, setLandmarks] = useState<ParsedLandmark[]>([]);
   const [routePath, setRoutePath] = useState<Array<{ coord: Coordinate }> | null>(null);
   const [highlightedLine, setHighlightedLine] = useState<ParsedLine | null>(null);
 
-  // 关闭“铁路图层”时，同时隐藏线路高亮与详情卡片，避免看起来“图层控制不生效”
+  // 关闭"铁路图层"时，同时隐藏线路高亮与详情卡片，避免看起来"图层控制不生效"
   useEffect(() => {
     if (!showRailway) {
       setHighlightedLine(null);
     }
   }, [showRailway]);
+
+  // 控制背景淡化
+  useEffect(() => {
+    const tilePane = document.querySelector('.leaflet-tile-pane');
+    if (tilePane) {
+      if (dimBackground) {
+        tilePane.classList.add('dimmed');
+      } else {
+        tilePane.classList.remove('dimmed');
+      }
+    }
+  }, [dimBackground]);
 
   // 加载搜索数据
   useEffect(() => {
@@ -261,9 +276,6 @@ function MapContainer() {
       {/* 地图容器 */}
       <div ref={mapRef} className="w-full h-full" />
 
-      {/* 白色遮罩层 - 在瓦片之上、线路之下 */}
-      <div className="map-overlay" />
-
       {/* 铁路图层 */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
         <RailwayLayer
@@ -308,6 +320,7 @@ function MapContainer() {
         {/* 工具栏 */}
         <Toolbar
           onNavigationClick={() => setShowNavigation(true)}
+          onLinesClick={() => setShowLinesPage(true)}
         />
 
         {/* 路径规划面板 - 展开时隐藏其他内容 */}
@@ -354,8 +367,10 @@ function MapContainer() {
         <LayerControl
           showRailway={showRailway}
           showLandmark={showLandmark}
+          dimBackground={dimBackground}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
+          onToggleDimBackground={setDimBackground}
         />
       </div>
 
@@ -374,6 +389,17 @@ function MapContainer() {
           map={leafletMapRef.current}
           projection={projectionRef.current}
           line={highlightedLine}
+        />
+      )}
+
+      {/* 线路列表页面 */}
+      {showLinesPage && (
+        <LinesPage
+          onBack={() => setShowLinesPage(false)}
+          onLineSelect={(line) => {
+            setShowLinesPage(false);
+            handleLineSelect(line);
+          }}
         />
       )}
     </div>

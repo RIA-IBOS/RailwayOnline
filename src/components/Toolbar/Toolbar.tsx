@@ -5,10 +5,12 @@
 
 interface ToolbarProps {
   onNavigationClick: () => void;
+  onLinesClick: () => void;
 }
 
 export function Toolbar({
   onNavigationClick,
+  onLinesClick,
 }: ToolbarProps) {
   return (
     <div className="bg-white/90 rounded-lg shadow-lg p-2 flex items-center gap-1">
@@ -30,6 +32,7 @@ export function Toolbar({
 
       {/* 全部线路 */}
       <button
+        onClick={onLinesClick}
         className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors group relative"
         title="线路列表"
       >
@@ -52,6 +55,24 @@ export function Toolbar({
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           帮助
         </span>
+        {/* 帮助弹出卡片 */}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none z-50">
+          <div className="text-xs text-gray-600 space-y-2">
+            <div>
+              <span className="font-medium text-gray-800">开发：</span>
+              <span>Venti_Lynn</span>
+            </div>
+            <div>
+              <span className="font-medium text-gray-800">数据来源：</span>
+              <div className="mt-1 space-y-0.5 text-gray-500">
+                <div>莉亚红一号卫星</div>
+                <div>秋月白</div>
+                <div>FY_杨</div>
+                <div>莉亚数据开放平台</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </button>
     </div>
   );
@@ -63,15 +84,19 @@ export function Toolbar({
 interface LayerControlProps {
   showRailway: boolean;
   showLandmark: boolean;
+  dimBackground: boolean;
   onToggleRailway: (show: boolean) => void;
   onToggleLandmark: (show: boolean) => void;
+  onToggleDimBackground: (dim: boolean) => void;
 }
 
 export function LayerControl({
   showRailway,
   showLandmark,
+  dimBackground,
   onToggleRailway,
   onToggleLandmark,
+  onToggleDimBackground,
 }: LayerControlProps) {
   return (
     <div className="bg-white/90 rounded-lg shadow-lg p-2 flex items-center gap-1">
@@ -109,6 +134,26 @@ export function LayerControl({
         </svg>
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           地标
+        </span>
+      </button>
+
+      <div className="w-px h-6 bg-gray-200" />
+
+      {/* 淡化背景 */}
+      <button
+        onClick={() => onToggleDimBackground(!dimBackground)}
+        className={`p-2 rounded-lg transition-colors group relative ${
+          dimBackground
+            ? 'bg-purple-100 text-purple-600'
+            : 'hover:bg-gray-100 text-gray-400'
+        }`}
+        title="淡化背景"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          淡化背景
         </span>
       </button>
     </div>

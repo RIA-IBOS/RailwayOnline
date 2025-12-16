@@ -10,8 +10,8 @@
 }
 
 /* 地图瓦片半透明 - 直接降低瓦片透明度 */
-.leaflet-tile-pane {
-  opacity: 0.5;
+.leaflet-tile-pane.dimmed {
+  opacity: 0.2;
 }
 
 /* 确保地图占满屏幕 */

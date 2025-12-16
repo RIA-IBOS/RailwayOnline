@@ -299,7 +299,7 @@ export function parseRMPData(data: RMPData): {
     if (lineStations.length >= 2) {
       lines.push({
         bureau: 'RMP',
-        line: String(lineIndex),
+        line: lineName,
         lineId,
         stations: lineStations,
         color,

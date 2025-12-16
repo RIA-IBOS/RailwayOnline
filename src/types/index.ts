@@ -34,7 +34,7 @@ export interface LineInfo {
   line: string;    // 线路号
   stationCode: number;  // 站点编号
   coord: Coordinate;
-  distance: number;  // 距前站距离(米)
+  distance?: number;  // 距前站距离(米)，可选：-1 表示未开通，省略则自动计算曼哈顿距离
 }
 
 // 特殊情况
@@ -44,6 +44,7 @@ export interface SpecialCase {
     bureau?: string;
     line?: string;
     isTrainUp?: boolean;
+    stationCode?: number;  // 用于 lineOvertaking：越行后下一站编号
     bureau1?: string;
     line1?: string;
     bureau2?: string;
@@ -93,3 +94,11 @@ export interface MapState {
   showRailway: boolean;
   showLandmarks: boolean;
 }
+
+// 铁路局信息
+export interface BureauInfo {
+  name: string;
+}
+
+// 铁路局配置（路局代码 -> 路局信息）
+export type BureausConfig = Record<string, BureauInfo>;

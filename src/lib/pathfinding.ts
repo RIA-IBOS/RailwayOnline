@@ -3,7 +3,7 @@
  * 使用 BFS/Dijkstra 算法查找最短路径
  */
 
-import type { ParsedLine, Coordinate } from '@/types';
+import type { ParsedLine, Coordinate, Station } from '@/types';
 
 // 路径节点
 interface PathNode {
@@ -26,6 +26,7 @@ interface GraphNode {
   stationName: string;
   lineId: string;
   coord: Coordinate;
+  stationCode: number;
   neighbors: Array<{
     stationName: string;
     lineId: string;
@@ -34,11 +35,88 @@ interface GraphNode {
   }>;
 }
 
+// 特殊情况预处理结果
+interface SpecialCasesIndex {
+  // 方向限制: Map<"stationName@lineId", Set<"up"|"down">>
+  blockedDirections: Map<string, Set<string>>;
+  // 未开通线路: Set<"stationName@lineId">
+  unavailableLines: Set<string>;
+  // 越行: Map<"stationName@lineId", number> (下一站 stationCode)
+  overtakingMap: Map<string, number>;
+  // 贯通运行: Map<"stationName@lineId1", "lineId2">
+  throughTrainMap: Map<string, string>;
+}
+
+/**
+ * 预处理特殊情况
+ */
+function processSpecialCases(stations: Station[]): SpecialCasesIndex {
+  const blockedDirections = new Map<string, Set<string>>();
+  const unavailableLines = new Set<string>();
+  const overtakingMap = new Map<string, number>();
+  const throughTrainMap = new Map<string, string>();
+
+  for (const station of stations) {
+    if (!station.specialCases) continue;
+
+    for (const sc of station.specialCases) {
+      switch (sc.type) {
+        case 'directionNotAvaliable': {
+          const lineId = `${sc.target.bureau}-${sc.target.line}`;
+          const key = `${station.stationName}@${lineId}`;
+          if (!blockedDirections.has(key)) {
+            blockedDirections.set(key, new Set());
+          }
+          blockedDirections.get(key)!.add(sc.target.isTrainUp ? 'up' : 'down');
+          break;
+        }
+
+        case 'lineNotAvaliable': {
+          const lineId = `${sc.target.bureau}-${sc.target.line}`;
+          const key = `${station.stationName}@${lineId}`;
+          unavailableLines.add(key);
+          break;
+        }
+
+        case 'lineOvertaking': {
+          const lineId = `${sc.target.bureau}-${sc.target.line}`;
+          const key = `${station.stationName}@${lineId}`;
+          if (sc.target.stationCode !== undefined) {
+            overtakingMap.set(key, sc.target.stationCode);
+          }
+          break;
+        }
+
+        case 'throughTrain': {
+          const lineId1 = `${sc.target.bureau1}-${sc.target.line1}`;
+          const lineId2 = `${sc.target.bureau2}-${sc.target.line2}`;
+          throughTrainMap.set(`${station.stationName}@${lineId1}`, lineId2);
+          throughTrainMap.set(`${station.stationName}@${lineId2}`, lineId1);
+          break;
+        }
+      }
+    }
+  }
+
+  return { blockedDirections, unavailableLines, overtakingMap, throughTrainMap };
+}
+
 /**
  * 构建铁路网络图
  */
-export function buildRailwayGraph(lines: ParsedLine[]): Map<string, GraphNode> {
+export function buildRailwayGraph(
+  lines: ParsedLine[],
+  rawStations?: Station[]
+): Map<string, GraphNode> {
   const graph = new Map<string, GraphNode>();
+
+  // 预处理特殊情况
+  const specialCases = rawStations ? processSpecialCases(rawStations) : {
+    blockedDirections: new Map<string, Set<string>>(),
+    unavailableLines: new Set<string>(),
+    overtakingMap: new Map<string, number>(),
+    throughTrainMap: new Map<string, string>(),
+  };
 
   // 用于查找同一站点的不同线路
   const stationLines = new Map<string, Array<{ lineId: string; coord: Coordinate }>>();
@@ -48,11 +126,15 @@ export function buildRailwayGraph(lines: ParsedLine[]): Map<string, GraphNode> {
     for (const station of line.stations) {
       const nodeKey = `${station.name}@${line.lineId}`;
 
+      // 跳过不可用的线路
+      if (specialCases.unavailableLines.has(nodeKey)) continue;
+
       // 添加到图
       graph.set(nodeKey, {
         stationName: station.name,
         lineId: line.lineId,
         coord: station.coord,
+        stationCode: station.stationCode,
         neighbors: [],
       });
 
@@ -72,40 +154,84 @@ export function buildRailwayGraph(lines: ParsedLine[]): Map<string, GraphNode> {
     for (let i = 0; i < line.stations.length; i++) {
       const station = line.stations[i];
       const nodeKey = `${station.name}@${line.lineId}`;
-      const node = graph.get(nodeKey)!;
+      const node = graph.get(nodeKey);
 
-      // 连接同一线路的相邻站点
+      if (!node) continue;  // 节点可能因特殊情况被跳过
+
+      // 获取当前站点的方向限制
+      const blockedDirs = specialCases.blockedDirections.get(nodeKey);
+
+      // 检查是否有越行
+      const overtakeTarget = specialCases.overtakingMap.get(nodeKey);
+
+      // 连接同一线路的相邻站点（上行方向：stationCode 减小）
       if (i > 0) {
         const prev = line.stations[i - 1];
-        const distance = calculateDistance(station.coord, prev.coord);
-        node.neighbors.push({
-          stationName: prev.name,
-          lineId: line.lineId,
-          distance,
-          isTransfer: false,
-        });
+        const prevKey = `${prev.name}@${line.lineId}`;
+
+        // 检查上行方向是否被阻止
+        if (!blockedDirs?.has('up') && graph.has(prevKey)) {
+          const distance = calculateDistance(station.coord, prev.coord);
+          node.neighbors.push({
+            stationName: prev.name,
+            lineId: line.lineId,
+            distance,
+            isTransfer: false,
+          });
+        }
       }
 
+      // 连接同一线路的相邻站点（下行方向：stationCode 增大）
       if (i < line.stations.length - 1) {
         const next = line.stations[i + 1];
-        const distance = calculateDistance(station.coord, next.coord);
-        node.neighbors.push({
-          stationName: next.name,
-          lineId: line.lineId,
-          distance,
-          isTransfer: false,
-        });
+        const nextKey = `${next.name}@${line.lineId}`;
+
+        // 检查下行方向是否被阻止
+        if (!blockedDirs?.has('down') && graph.has(nextKey)) {
+          // 如果有越行，检查下一站是否是越行目标
+          if (overtakeTarget !== undefined) {
+            // 有越行时，只连接到越行目标站
+            const targetStation = line.stations.find(s => s.stationCode === overtakeTarget);
+            if (targetStation) {
+              const targetKey = `${targetStation.name}@${line.lineId}`;
+              if (graph.has(targetKey)) {
+                const distance = calculateDistance(station.coord, targetStation.coord);
+                node.neighbors.push({
+                  stationName: targetStation.name,
+                  lineId: line.lineId,
+                  distance,
+                  isTransfer: false,
+                });
+              }
+            }
+          } else {
+            // 正常连接下一站
+            const distance = calculateDistance(station.coord, next.coord);
+            node.neighbors.push({
+              stationName: next.name,
+              lineId: line.lineId,
+              distance,
+              isTransfer: false,
+            });
+          }
+        }
       }
 
       // 连接同一站点的不同线路（换乘）
       const sameStationLines = stationLines.get(station.name) || [];
       for (const other of sameStationLines) {
         if (other.lineId !== line.lineId) {
+          const otherKey = `${station.name}@${other.lineId}`;
+          if (!graph.has(otherKey)) continue;
+
+          // 检查是否为贯通运行
+          const isThroughTrain = specialCases.throughTrainMap.get(nodeKey) === other.lineId;
+
           node.neighbors.push({
             stationName: station.name,
             lineId: other.lineId,
-            distance: 0,  // 换乘距离为 0
-            isTransfer: true,
+            distance: 0,
+            isTransfer: !isThroughTrain,  // 贯通运行不算换乘
           });
         }
       }

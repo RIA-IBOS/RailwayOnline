@@ -3,10 +3,14 @@
  * 解析 RIA_Data 仓库中的铁路数据，生成用于地图渲染的线路和站点信息
  */
 
-import type { Station, LineInfo, ParsedLine, ParsedStation, Coordinate } from '@/types';
+import type { Station, LineInfo, ParsedLine, ParsedStation, Coordinate, BureausConfig } from '@/types';
 
 // 数据源 URL
 const RAILWAY_DATA_URL = 'https://raw.githubusercontent.com/RainC7/RIA_Data/main/data/railway';
+const BUREAUS_CONFIG_URL = '/data/bureaus.json';
+
+// 铁路局配置缓存
+let bureausCache: BureausConfig | null = null;
 
 // 线路颜色映射
 const LINE_COLORS: Record<string, string> = {
@@ -81,11 +85,38 @@ export async function fetchRailwayData(worldId: string): Promise<Station[]> {
 }
 
 /**
+ * 获取铁路局配置
+ */
+export async function fetchBureausConfig(): Promise<BureausConfig> {
+  if (bureausCache) return bureausCache;
+
+  try {
+    const response = await fetch(BUREAUS_CONFIG_URL);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch bureaus config: ${response.status}`);
+    }
+    bureausCache = await response.json();
+    return bureausCache!;
+  } catch (error) {
+    console.error('Error fetching bureaus config:', error);
+    return {};
+  }
+}
+
+/**
+ * 获取铁路局名称
+ */
+export function getBureauName(bureausConfig: BureausConfig, code: string): string {
+  return bureausConfig[code]?.name || code;
+}
+
+/**
  * 解析铁路数据，生成线路和站点信息
  */
 export function parseRailwayData(stations: Station[]): {
   lines: ParsedLine[];
   stationIndex: Map<string, ParsedStation>;
+  rawStations: Station[];
 } {
   // 线路索引: lineId -> { stations: Map<stationCode, stationInfo> }
   const lineIndex = new Map<string, Map<number, { name: string; coord: Coordinate; lineInfo: LineInfo }>>();
@@ -99,6 +130,9 @@ export function parseRailwayData(stations: Station[]): {
     const lineIds: string[] = [];
 
     for (const line of station.lines) {
+      // 跳过未开通的线路（distance === -1）
+      if (line.distance === -1) continue;
+
       const lineId = `${line.bureau}-${line.line}`;
       lineIds.push(lineId);
 
@@ -114,21 +148,23 @@ export function parseRailwayData(stations: Station[]): {
       });
     }
 
-    // 添加到站点索引
-    if (!stationIndex.has(station.stationName)) {
-      const firstLine = station.lines[0];
-      stationIndex.set(station.stationName, {
-        name: station.stationName,
-        coord: firstLine.coord,
-        stationCode: firstLine.stationCode,
-        isTransfer: station.lines.length > 1,
-        lines: lineIds,
-      });
-    } else {
-      // 更新换乘信息
-      const existing = stationIndex.get(station.stationName)!;
-      existing.isTransfer = true;
-      existing.lines = [...new Set([...existing.lines, ...lineIds])];
+    // 添加到站点索引（只有经过至少一条已开通线路的站点）
+    if (lineIds.length > 0) {
+      if (!stationIndex.has(station.stationName)) {
+        const firstLine = station.lines.find(l => l.distance !== -1)!;
+        stationIndex.set(station.stationName, {
+          name: station.stationName,
+          coord: firstLine.coord,
+          stationCode: firstLine.stationCode,
+          isTransfer: lineIds.length > 1,
+          lines: lineIds,
+        });
+      } else {
+        // 更新换乘信息
+        const existing = stationIndex.get(station.stationName)!;
+        existing.isTransfer = true;
+        existing.lines = [...new Set([...existing.lines, ...lineIds])];
+      }
     }
   }
 
@@ -172,7 +208,7 @@ export function parseRailwayData(stations: Station[]): {
     return a.line.localeCompare(b.line);
   });
 
-  return { lines, stationIndex };
+  return { lines, stationIndex, rawStations: stations };
 }
 
 /**

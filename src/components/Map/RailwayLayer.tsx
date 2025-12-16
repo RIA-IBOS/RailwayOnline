@@ -5,8 +5,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet';
-import type { ParsedLine, ParsedStation } from '@/types';
-import { fetchRailwayData, parseRailwayData } from '@/lib/railwayParser';
+import type { ParsedLine, ParsedStation, BureausConfig } from '@/types';
+import { fetchRailwayData, parseRailwayData, getBureauName } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { DynmapProjection } from '@/lib/DynmapProjection';
 
@@ -194,6 +194,7 @@ export function RailwayLayer({
 interface RailwayControlProps {
   lines: ParsedLine[];
   visibleLines: Set<string>;
+  bureausConfig: BureausConfig;
   onToggleLine: (lineId: string) => void;
   onToggleAll: (visible: boolean) => void;
 }
@@ -201,6 +202,7 @@ interface RailwayControlProps {
 export function RailwayControl({
   lines,
   visibleLines,
+  bureausConfig,
   onToggleLine,
   onToggleAll,
 }: RailwayControlProps) {
@@ -212,13 +214,6 @@ export function RailwayControl({
     acc[line.bureau].push(line);
     return acc;
   }, {} as Record<string, ParsedLine[]>);
-
-  const bureauNames: Record<string, string> = {
-    R: '铁路局',
-    H: '华铁局',
-    T: '铁运局',
-    G: '高铁局',
-  };
 
   return (
     <div className="railway-control bg-white rounded-lg shadow-lg p-3 max-h-80 overflow-y-auto">
@@ -243,7 +238,7 @@ export function RailwayControl({
       {Object.entries(groupedLines).map(([bureau, bureauLines]) => (
         <div key={bureau} className="mb-2">
           <div className="text-xs font-medium text-gray-500 mb-1">
-            {bureauNames[bureau] || bureau}
+            {getBureauName(bureausConfig, bureau)}
           </div>
           <div className="flex flex-wrap gap-1">
             {bureauLines.map(line => (
