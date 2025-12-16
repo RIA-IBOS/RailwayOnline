@@ -102,7 +102,11 @@ function MapContainer() {
       // 合并线路和站点
       const allLines = [...riaLines, ...rmpLines];
       const riaStations = getAllStations(riaLines);
-      const allStations = [...riaStations, ...rmpStations];
+
+      // 合并站点：RIA站点优先，RMP站点只添加不重复的
+      const riaStationNames = new Set(riaStations.map(s => s.name));
+      const uniqueRmpStations = rmpStations.filter(s => !riaStationNames.has(s.name));
+      const allStations = [...riaStations, ...uniqueRmpStations];
 
       setLines(allLines);
       setStations(allStations);
@@ -402,6 +406,7 @@ function MapContainer() {
           <NavigationPanel
             stations={stations}
             lines={lines}
+            landmarks={landmarks}
             onRouteFound={handleRouteFound}
             onClose={() => setShowNavigation(false)}
           />

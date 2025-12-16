@@ -14,6 +14,12 @@
   opacity: 0.2;
 }
 
+/* 地标房子图标样式 */
+.landmark-house-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
 /* 确保地图占满屏幕 */
 html, body, #root {
   margin: 0;

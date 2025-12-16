@@ -1,37 +1,79 @@
 /**
  * 导航面板组件
  * 提供起终点搜索和路径规划功能
+ * 支持站点和地标作为起终点
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import type { ParsedStation, ParsedLine, Coordinate } from '@/types';
+import type { ParsedLandmark } from '@/lib/landmarkParser';
 import { buildRailwayGraph, findShortestPath, simplifyPath, PathResult } from '@/lib/pathfinding';
 
 interface NavigationPanelProps {
   stations: ParsedStation[];
   lines: ParsedLine[];
+  landmarks: ParsedLandmark[];
   onRouteFound?: (path: Array<{ coord: Coordinate }>) => void;
   onClose: () => void;
 }
 
-// 站点搜索输入组件
-interface StationSearchInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  stations: string[];
+// 搜索项类型
+interface SearchItem {
+  type: 'station' | 'landmark';
+  name: string;
+  coord: Coordinate;
+}
+
+// 计算两点间距离
+function getDistance(a: Coordinate, b: Coordinate): number {
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+// 找到最近的站点
+function findNearestStation(
+  coord: Coordinate,
+  stations: ParsedStation[]
+): ParsedStation | null {
+  if (stations.length === 0) return null;
+
+  let nearest = stations[0];
+  let minDist = getDistance(coord, stations[0].coord);
+
+  for (const station of stations) {
+    const dist = getDistance(coord, station.coord);
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = station;
+    }
+  }
+
+  return nearest;
+}
+
+// 搜索输入组件
+interface PointSearchInputProps {
+  value: SearchItem | null;
+  onChange: (item: SearchItem | null) => void;
+  items: SearchItem[];
   placeholder: string;
   label: string;
 }
 
-function StationSearchInput({ value, onChange, stations, placeholder, label }: StationSearchInputProps) {
+function PointSearchInput({ value, onChange, items, placeholder, label }: PointSearchInputProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState(value);
+  const [query, setQuery] = useState(value?.name || '');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 过滤匹配的站点
-  const filteredStations = query.length > 0
-    ? stations.filter(s => s.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : [];
+  // 过滤匹配的项目
+  const filteredItems = useMemo(() => {
+    if (query.length === 0) return [];
+    const q = query.toLowerCase();
+    return items
+      .filter(item => item.name.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [query, items]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -46,12 +88,12 @@ function StationSearchInput({ value, onChange, stations, placeholder, label }: S
 
   // 同步外部值
   useEffect(() => {
-    setQuery(value);
+    setQuery(value?.name || '');
   }, [value]);
 
-  const handleSelect = (station: string) => {
-    setQuery(station);
-    onChange(station);
+  const handleSelect = (item: SearchItem) => {
+    setQuery(item.name);
+    onChange(item);
     setIsOpen(false);
   };
 
@@ -64,12 +106,9 @@ function StationSearchInput({ value, onChange, stations, placeholder, label }: S
         onChange={(e) => {
           setQuery(e.target.value);
           setIsOpen(true);
-          // 如果完全匹配则设置值
-          if (stations.includes(e.target.value)) {
-            onChange(e.target.value);
-          } else {
-            onChange('');
-          }
+          // 检查是否完全匹配
+          const match = items.find(item => item.name === e.target.value);
+          onChange(match || null);
         }}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
@@ -77,15 +116,32 @@ function StationSearchInput({ value, onChange, stations, placeholder, label }: S
       />
 
       {/* 下拉搜索结果 */}
-      {isOpen && filteredStations.length > 0 && (
+      {isOpen && filteredItems.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg max-h-48 overflow-y-auto z-50 border">
-          {filteredStations.map((station) => (
+          {filteredItems.map((item, idx) => (
             <button
-              key={station}
-              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-50 last:border-b-0"
-              onClick={() => handleSelect(station)}
+              key={`${item.type}-${item.name}-${idx}`}
+              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-50 last:border-b-0 flex items-center gap-2"
+              onClick={() => handleSelect(item)}
             >
-              {station}
+              {/* 类型图标 */}
+              {item.type === 'station' ? (
+                <span className="text-blue-500">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3" strokeWidth={2} />
+                  </svg>
+                </span>
+              ) : (
+                <span className="text-orange-500">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                  </svg>
+                </span>
+              )}
+              <span>{item.name}</span>
+              <span className="text-xs text-gray-400 ml-auto">
+                {item.type === 'station' ? '站点' : '地标'}
+              </span>
             </button>
           ))}
         </div>
@@ -94,64 +150,229 @@ function StationSearchInput({ value, onChange, stations, placeholder, label }: S
   );
 }
 
+// 完整路线结果
+interface FullRouteResult {
+  found: boolean;
+  // 起点步行
+  walkStart?: {
+    from: SearchItem;
+    to: ParsedStation;
+    distance: number;
+  };
+  // 铁路路线
+  railPath?: PathResult;
+  // 终点步行
+  walkEnd?: {
+    from: ParsedStation;
+    to: SearchItem;
+    distance: number;
+  };
+  // 总距离
+  totalDistance: number;
+  // 总换乘
+  totalTransfers: number;
+}
+
 export function NavigationPanel({
   stations,
   lines,
+  landmarks,
   onRouteFound,
   onClose,
 }: NavigationPanelProps) {
-  const [startStation, setStartStation] = useState('');
-  const [endStation, setEndStation] = useState('');
+  const [startPoint, setStartPoint] = useState<SearchItem | null>(null);
+  const [endPoint, setEndPoint] = useState<SearchItem | null>(null);
   const [preferLessTransfer, setPreferLessTransfer] = useState(true);
-  const [result, setResult] = useState<PathResult | null>(null);
+  const [result, setResult] = useState<FullRouteResult | null>(null);
   const [searching, setSearching] = useState(false);
 
-  // 站点名称列表（去重并排序）
-  const stationNames = [...new Set(stations.map(s => s.name))].sort();
+  // 构建搜索项列表（站点 + 地标）
+  const searchItems = useMemo(() => {
+    const items: SearchItem[] = [];
+
+    // 添加站点（去重）
+    const stationNames = new Set<string>();
+    for (const station of stations) {
+      if (!stationNames.has(station.name)) {
+        stationNames.add(station.name);
+        items.push({
+          type: 'station',
+          name: station.name,
+          coord: station.coord,
+        });
+      }
+    }
+
+    // 添加地标
+    for (const landmark of landmarks) {
+      if (landmark.coord) {
+        items.push({
+          type: 'landmark',
+          name: landmark.name,
+          coord: landmark.coord,
+        });
+      }
+    }
+
+    return items;
+  }, [stations, landmarks]);
 
   // 搜索路径
   const handleSearch = () => {
-    if (!startStation || !endStation) return;
-    if (startStation === endStation) {
+    if (!startPoint || !endPoint) return;
+    if (startPoint.name === endPoint.name) {
       setResult({
         found: false,
-        path: [],
-        transfers: 0,
         totalDistance: 0,
-        lines: [],
+        totalTransfers: 0,
       });
       return;
     }
 
     setSearching(true);
 
-    // 构建图并搜索
     setTimeout(() => {
+      // 确定起点站和终点站
+      let startStation: ParsedStation | null = null;
+      let endStation: ParsedStation | null = null;
+      let walkStartDist = 0;
+      let walkEndDist = 0;
+
+      if (startPoint.type === 'station') {
+        startStation = stations.find(s => s.name === startPoint.name) || null;
+      } else {
+        // 地标：找最近站点
+        startStation = findNearestStation(startPoint.coord, stations);
+        if (startStation) {
+          walkStartDist = getDistance(startPoint.coord, startStation.coord);
+        }
+      }
+
+      if (endPoint.type === 'station') {
+        endStation = stations.find(s => s.name === endPoint.name) || null;
+      } else {
+        // 地标：找最近站点
+        endStation = findNearestStation(endPoint.coord, stations);
+        if (endStation) {
+          walkEndDist = getDistance(endPoint.coord, endStation.coord);
+        }
+      }
+
+      if (!startStation || !endStation) {
+        setResult({ found: false, totalDistance: 0, totalTransfers: 0 });
+        setSearching(false);
+        return;
+      }
+
+      // 如果起终点是同一站
+      if (startStation.name === endStation.name) {
+        const fullResult: FullRouteResult = {
+          found: true,
+          totalDistance: walkStartDist + walkEndDist,
+          totalTransfers: 0,
+        };
+
+        if (walkStartDist > 0) {
+          fullResult.walkStart = {
+            from: startPoint,
+            to: startStation,
+            distance: walkStartDist,
+          };
+        }
+        if (walkEndDist > 0) {
+          fullResult.walkEnd = {
+            from: startStation,
+            to: endPoint,
+            distance: walkEndDist,
+          };
+        }
+
+        setResult(fullResult);
+        setSearching(false);
+
+        // 通知路径
+        if (onRouteFound) {
+          const path: Array<{ coord: Coordinate }> = [{ coord: startPoint.coord }];
+          if (startStation) path.push({ coord: startStation.coord });
+          path.push({ coord: endPoint.coord });
+          onRouteFound(path);
+        }
+        return;
+      }
+
+      // 构建图并搜索铁路路径
       const graph = buildRailwayGraph(lines);
-      const pathResult = findShortestPath(graph, startStation, endStation, preferLessTransfer);
-      setResult(pathResult);
+      const railResult = findShortestPath(graph, startStation.name, endStation.name, preferLessTransfer);
+
+      if (!railResult.found) {
+        setResult({ found: false, totalDistance: 0, totalTransfers: 0 });
+        setSearching(false);
+        return;
+      }
+
+      // 构建完整结果
+      const fullResult: FullRouteResult = {
+        found: true,
+        railPath: railResult,
+        totalDistance: walkStartDist + railResult.totalDistance + walkEndDist,
+        totalTransfers: railResult.transfers,
+      };
+
+      if (walkStartDist > 0) {
+        fullResult.walkStart = {
+          from: startPoint,
+          to: startStation,
+          distance: walkStartDist,
+        };
+      }
+      if (walkEndDist > 0) {
+        fullResult.walkEnd = {
+          from: endStation,
+          to: endPoint,
+          distance: walkEndDist,
+        };
+      }
+
+      setResult(fullResult);
       setSearching(false);
 
-      // 通知父组件路径
-      if (pathResult.found && onRouteFound) {
-        onRouteFound(pathResult.path);
+      // 通知路径（包含步行路段）
+      if (onRouteFound) {
+        const path: Array<{ coord: Coordinate }> = [];
+
+        // 起点步行
+        if (fullResult.walkStart) {
+          path.push({ coord: startPoint.coord });
+        }
+
+        // 铁路路径
+        for (const node of railResult.path) {
+          path.push({ coord: node.coord });
+        }
+
+        // 终点步行
+        if (fullResult.walkEnd) {
+          path.push({ coord: endPoint.coord });
+        }
+
+        onRouteFound(path);
       }
     }, 0);
   };
 
   // 交换起终点
   const handleSwap = () => {
-    const temp = startStation;
-    setStartStation(endStation);
-    setEndStation(temp);
+    const temp = startPoint;
+    setStartPoint(endPoint);
+    setEndPoint(temp);
     setResult(null);
   };
 
-  // 简化路径显示
-  const segments = result?.found ? simplifyPath(result.path) : [];
+  // 简化铁路路径显示
+  const railSegments = result?.railPath?.found ? simplifyPath(result.railPath.path) : [];
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-72 max-h-[60vh] flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg w-72 max-h-[70vh] flex flex-col">
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="font-bold text-gray-800">路径规划</h3>
@@ -169,11 +390,11 @@ export function NavigationPanel({
       <div className="p-3 border-b">
         <div className="flex items-start gap-2 mb-2">
           <div className="flex-1">
-            <StationSearchInput
-              value={startStation}
-              onChange={(v) => { setStartStation(v); setResult(null); }}
-              stations={stationNames}
-              placeholder="输入起点站..."
+            <PointSearchInput
+              value={startPoint}
+              onChange={(v) => { setStartPoint(v); setResult(null); }}
+              items={searchItems}
+              placeholder="输入起点（站点/地标）..."
               label="起点"
             />
           </div>
@@ -189,11 +410,11 @@ export function NavigationPanel({
         </div>
 
         <div className="mb-2">
-          <StationSearchInput
-            value={endStation}
-            onChange={(v) => { setEndStation(v); setResult(null); }}
-            stations={stationNames}
-            placeholder="输入终点站..."
+          <PointSearchInput
+            value={endPoint}
+            onChange={(v) => { setEndPoint(v); setResult(null); }}
+            items={searchItems}
+            placeholder="输入终点（站点/地标）..."
             label="终点"
           />
         </div>
@@ -214,7 +435,7 @@ export function NavigationPanel({
 
           <button
             onClick={handleSearch}
-            disabled={!startStation || !endStation || searching}
+            disabled={!startPoint || !endPoint || searching}
             className="px-4 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs font-medium"
           >
             {searching ? '搜索中...' : '搜索'}
@@ -231,20 +452,41 @@ export function NavigationPanel({
               <div className="flex items-center gap-3 mb-3 text-xs">
                 <div className="flex items-center gap-1">
                   <span className="text-gray-500">换乘:</span>
-                  <span className="font-medium text-blue-600">{result.transfers}次</span>
+                  <span className="font-medium text-blue-600">{result.totalTransfers}次</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-500">距离:</span>
+                  <span className="text-gray-500">总距离:</span>
                   <span className="font-medium">{Math.round(result.totalDistance)}m</span>
                 </div>
               </div>
 
               {/* 路线详情 */}
               <div className="space-y-2">
-                {segments.map((segment, index) => (
+                {/* 起点步行 */}
+                {result.walkStart && (
+                  <div className="relative pl-5">
+                    <div className="absolute left-[7px] top-0 bottom-0 w-0.5 bg-gray-300 border-dashed" style={{ borderLeft: '2px dashed #ccc', width: 0 }} />
+                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-green-500 text-white text-[10px] flex items-center justify-center">
+                      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
+                      </svg>
+                    </div>
+                    <div className="bg-green-50 rounded p-2">
+                      <div className="text-[10px] text-green-600 font-medium mb-0.5">
+                        步行 {Math.round(result.walkStart.distance)}m
+                      </div>
+                      <div className="text-xs text-gray-800">
+                        {result.walkStart.from.name} → {result.walkStart.to.name}站
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 铁路路线 */}
+                {railSegments.map((segment, index) => (
                   <div key={index} className="relative pl-5">
                     {/* 连接线 */}
-                    {index < segments.length - 1 && (
+                    {(index < railSegments.length - 1 || result.walkEnd) && (
                       <div className="absolute left-[7px] top-5 bottom-0 w-0.5 bg-gray-200" />
                     )}
 
@@ -273,11 +515,30 @@ export function NavigationPanel({
                     </div>
                   </div>
                 ))}
+
+                {/* 终点步行 */}
+                {result.walkEnd && (
+                  <div className="relative pl-5">
+                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">
+                      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
+                      </svg>
+                    </div>
+                    <div className="bg-red-50 rounded p-2">
+                      <div className="text-[10px] text-red-600 font-medium mb-0.5">
+                        步行 {Math.round(result.walkEnd.distance)}m
+                      </div>
+                      <div className="text-xs text-gray-800">
+                        {result.walkEnd.from.name}站 → {result.walkEnd.to.name}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
             <div className="text-center text-gray-500 py-4 text-sm">
-              {startStation === endStation ? '起点和终点相同' : '未找到可用路线'}
+              {startPoint?.name === endPoint?.name ? '起点和终点相同' : '未找到可用路线'}
             </div>
           )}
         </div>

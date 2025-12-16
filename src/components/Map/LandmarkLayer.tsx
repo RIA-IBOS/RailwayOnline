@@ -88,14 +88,17 @@ export function LandmarkLayer({
       const color = getLandmarkColor(landmark.grade);
       const size = getLandmarkSize(landmark.grade);
 
-      // 使用菱形标记
-      const marker = L.circleMarker(latLng, {
-        radius: size,
-        color: color,
-        weight: 2,
-        fillColor: color,
-        fillOpacity: 0.6,
+      // 创建房子形状的自定义图标
+      const houseIcon = L.divIcon({
+        className: 'landmark-house-icon',
+        html: `<svg width="${size * 3}" height="${size * 3}" viewBox="0 0 24 24" fill="${color}" stroke="${color}" stroke-width="1">
+          <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>`,
+        iconSize: [size * 3, size * 3],
+        iconAnchor: [size * 1.5, size * 3],
       });
+
+      const marker = L.marker(latLng, { icon: houseIcon });
 
       // 地标 tooltip
       marker.bindTooltip(`<b>${landmark.name}</b><br/>${landmark.grade}`, {
