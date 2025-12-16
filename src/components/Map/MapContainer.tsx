@@ -409,6 +409,13 @@ function MapContainer() {
             landmarks={landmarks}
             onRouteFound={handleRouteFound}
             onClose={() => setShowNavigation(false)}
+            onPointClick={(coord) => {
+              const map = leafletMapRef.current;
+              const proj = projectionRef.current;
+              if (!map || !proj) return;
+              const latLng = proj.locationToLatLng(coord.x, coord.y || 64, coord.z);
+              map.setView(latLng, 5);
+            }}
           />
         )}
 

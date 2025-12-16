@@ -15,6 +15,7 @@ interface NavigationPanelProps {
   landmarks: ParsedLandmark[];
   onRouteFound?: (path: Array<{ coord: Coordinate }>) => void;
   onClose: () => void;
+  onPointClick?: (coord: Coordinate) => void;  // 点击起点/终点跳转
 }
 
 // 搜索项类型
@@ -179,12 +180,28 @@ export function NavigationPanel({
   landmarks,
   onRouteFound,
   onClose,
+  onPointClick,
 }: NavigationPanelProps) {
   const [startPoint, setStartPoint] = useState<SearchItem | null>(null);
   const [endPoint, setEndPoint] = useState<SearchItem | null>(null);
   const [preferLessTransfer, setPreferLessTransfer] = useState(true);
   const [result, setResult] = useState<FullRouteResult | null>(null);
   const [searching, setSearching] = useState(false);
+
+  // 格式化线路显示名称
+  const formatLineName = (lineId: string): string => {
+    const line = lines.find(l => l.lineId === lineId);
+    if (line) {
+      return line.bureau === 'RMP' ? line.line : `${line.bureau}-${line.line}`;
+    }
+    return lineId;
+  };
+
+  // 根据站点名查找坐标
+  const findStationCoord = (stationName: string): Coordinate | null => {
+    const station = stations.find(s => s.name === stationName);
+    return station?.coord || null;
+  };
 
   // 构建搜索项列表（站点 + 地标）
   const searchItems = useMemo(() => {
@@ -476,7 +493,19 @@ export function NavigationPanel({
                         步行 {Math.round(result.walkStart.distance)}m
                       </div>
                       <div className="text-xs text-gray-800">
-                        {result.walkStart.from.name} → {result.walkStart.to.name}站
+                        <button
+                          className="text-green-700 hover:underline"
+                          onClick={() => onPointClick?.(result.walkStart!.from.coord)}
+                        >
+                          {result.walkStart.from.name}
+                        </button>
+                        <span className="text-gray-400 mx-1">→</span>
+                        <button
+                          className="text-green-700 hover:underline"
+                          onClick={() => onPointClick?.(result.walkStart!.to.coord)}
+                        >
+                          {result.walkStart.to.name}站
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -498,10 +527,18 @@ export function NavigationPanel({
                     {/* 线路信息 */}
                     <div className="bg-gray-50 rounded p-2">
                       <div className="text-[10px] text-blue-600 font-medium mb-0.5">
-                        {segment.lineId}
+                        {formatLineName(segment.lineId)}
                       </div>
                       <div className="text-xs text-gray-800">
-                        {segment.stations[0]}
+                        <button
+                          className="hover:underline hover:text-blue-600"
+                          onClick={() => {
+                            const coord = findStationCoord(segment.stations[0]);
+                            if (coord) onPointClick?.(coord);
+                          }}
+                        >
+                          {segment.stations[0]}
+                        </button>
                         {segment.stations.length > 2 && (
                           <span className="text-gray-400 mx-1">
                             → {segment.stations.length - 2}站 →
@@ -510,7 +547,17 @@ export function NavigationPanel({
                         {segment.stations.length === 2 && (
                           <span className="text-gray-400 mx-1">→</span>
                         )}
-                        {segment.stations.length > 1 && segment.stations[segment.stations.length - 1]}
+                        {segment.stations.length > 1 && (
+                          <button
+                            className="hover:underline hover:text-blue-600"
+                            onClick={() => {
+                              const coord = findStationCoord(segment.stations[segment.stations.length - 1]);
+                              if (coord) onPointClick?.(coord);
+                            }}
+                          >
+                            {segment.stations[segment.stations.length - 1]}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -529,7 +576,19 @@ export function NavigationPanel({
                         步行 {Math.round(result.walkEnd.distance)}m
                       </div>
                       <div className="text-xs text-gray-800">
-                        {result.walkEnd.from.name}站 → {result.walkEnd.to.name}
+                        <button
+                          className="text-red-700 hover:underline"
+                          onClick={() => onPointClick?.(result.walkEnd!.from.coord)}
+                        >
+                          {result.walkEnd.from.name}站
+                        </button>
+                        <span className="text-gray-400 mx-1">→</span>
+                        <button
+                          className="text-red-700 hover:underline"
+                          onClick={() => onPointClick?.(result.walkEnd!.to.coord)}
+                        >
+                          {result.walkEnd.to.name}
+                        </button>
                       </div>
                     </div>
                   </div>
