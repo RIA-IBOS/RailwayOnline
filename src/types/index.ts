@@ -102,3 +102,15 @@ export interface BureauInfo {
 
 // 铁路局配置（路局代码 -> 路局信息）
 export type BureausConfig = Record<string, BureauInfo>;
+
+// 在线玩家数据
+export interface Player {
+  name: string;
+  account: string;
+  x: number;
+  y: number;
+  z: number;
+  health: number;
+  armor: number;
+  world: string;
+}

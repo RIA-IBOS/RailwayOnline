@@ -3,7 +3,7 @@
  * 包含路径规划等快捷功能图标
  */
 
-import { Navigation, List, HelpCircle, Train, Home, Moon, X } from 'lucide-react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User } from 'lucide-react';
 
 interface ToolbarProps {
   onNavigationClick: () => void;
@@ -114,18 +114,22 @@ export function AboutCard({ onClose }: AboutCardProps) {
 interface LayerControlProps {
   showRailway: boolean;
   showLandmark: boolean;
+  showPlayers: boolean;
   dimBackground: boolean;
   onToggleRailway: (show: boolean) => void;
   onToggleLandmark: (show: boolean) => void;
+  onTogglePlayers: (show: boolean) => void;
   onToggleDimBackground: (dim: boolean) => void;
 }
 
 export function LayerControl({
   showRailway,
   showLandmark,
+  showPlayers,
   dimBackground,
   onToggleRailway,
   onToggleLandmark,
+  onTogglePlayers,
   onToggleDimBackground,
 }: LayerControlProps) {
   return (
@@ -159,6 +163,22 @@ export function LayerControl({
         <Home className="w-5 h-5" />
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           地标
+        </span>
+      </button>
+
+      {/* 玩家图层 */}
+      <button
+        onClick={() => onTogglePlayers(!showPlayers)}
+        className={`p-2 rounded-lg transition-colors group relative ${
+          showPlayers
+            ? 'bg-cyan-100 text-cyan-600'
+            : 'hover:bg-gray-100 text-gray-400'
+        }`}
+        title="玩家图层"
+      >
+        <User className="w-5 h-5" />
+        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          玩家
         </span>
       </button>
 

@@ -5,6 +5,7 @@ import { createDynmapCRS, ZTH_FLAT_CONFIG, DynmapProjection } from '@/lib/Dynmap
 import { DynmapTileLayer, createDynmapTileLayer } from '@/lib/DynmapTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
+import { PlayerLayer } from './PlayerLayer';
 import { RouteHighlightLayer } from './RouteHighlightLayer';
 import { LineHighlightLayer } from './LineHighlightLayer';
 import { WorldSwitcher } from './WorldSwitcher';
@@ -12,6 +13,7 @@ import { SearchBar } from '../Search/SearchBar';
 import { NavigationPanel } from '../Navigation/NavigationPanel';
 import { LineDetailCard } from '../LineDetail/LineDetailCard';
 import { PointDetailCard } from '../PointDetail/PointDetailCard';
+import { PlayerDetailCard } from '../PlayerDetail/PlayerDetailCard';
 import { Toolbar, LayerControl, AboutCard } from '../Toolbar/Toolbar';
 import { LinesPage } from '../Lines/LinesPage';
 import { LoadingOverlay } from '../Loading/LoadingOverlay';
@@ -19,7 +21,7 @@ import { useLoadingStore } from '@/store/loadingStore';
 import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
-import type { ParsedStation, ParsedLine, Coordinate } from '@/types';
+import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 
 // 世界配置
@@ -43,6 +45,7 @@ function MapContainer() {
   const [currentWorld, setCurrentWorld] = useState('zth');
   const [showRailway, setShowRailway] = useState(true);
   const [showLandmark, setShowLandmark] = useState(true);
+  const [showPlayers, setShowPlayers] = useState(true);
   const [dimBackground, setDimBackground] = useState(false);
   const [showNavigation, setShowNavigation] = useState(false);
   const [showLinesPage, setShowLinesPage] = useState(false);
@@ -59,6 +62,7 @@ function MapContainer() {
     station?: ParsedStation;
     landmark?: ParsedLandmark;
   } | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
   // 关闭"铁路图层"时，同时隐藏线路高亮与详情卡片，避免看起来"图层控制不生效"
   useEffect(() => {
@@ -191,6 +195,7 @@ function MapContainer() {
       station,
     });
     setHighlightedLine(null);
+    setSelectedPlayer(null);
 
     const map = leafletMapRef.current;
     const proj = projectionRef.current;
@@ -209,11 +214,25 @@ function MapContainer() {
       landmark,
     });
     setHighlightedLine(null);
+    setSelectedPlayer(null);
 
     const map = leafletMapRef.current;
     const proj = projectionRef.current;
     if (!map || !proj) return;
     const latLng = proj.locationToLatLng(landmark.coord.x, landmark.coord.y || 64, landmark.coord.z);
+    map.setView(latLng, 5);
+  }, []);
+
+  // 玩家点击处理
+  const handlePlayerClick = useCallback((player: Player) => {
+    setSelectedPlayer(player);
+    setSelectedPoint(null);
+    setHighlightedLine(null);
+
+    const map = leafletMapRef.current;
+    const proj = projectionRef.current;
+    if (!map || !proj) return;
+    const latLng = proj.locationToLatLng(player.x, player.y, player.z);
     map.setView(latLng, 5);
   }, []);
 
@@ -400,6 +419,17 @@ function MapContainer() {
         />
       )}
 
+      {/* 玩家图层 */}
+      {mapReady && leafletMapRef.current && projectionRef.current && (
+        <PlayerLayer
+          map={leafletMapRef.current}
+          projection={projectionRef.current}
+          worldId={currentWorld}
+          visible={showPlayers}
+          onPlayerClick={handlePlayerClick}
+        />
+      )}
+
       {/* 左侧面板区域 */}
       <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 max-w-[300px]">
         {/* 标题和世界切换 */}
@@ -452,7 +482,7 @@ function MapContainer() {
         )}
 
       {/* 线路详情卡片 - 路径规划打开时隐藏 */}
-      {highlightedLine && !showNavigation && !selectedPoint && (
+      {highlightedLine && !showNavigation && !selectedPoint && !selectedPlayer && (
         <LineDetailCard
           line={highlightedLine}
             onClose={() => setHighlightedLine(null)}
@@ -467,7 +497,7 @@ function MapContainer() {
         )}
 
         {/* 点位详情卡片 */}
-        {selectedPoint && !showNavigation && (() => {
+        {selectedPoint && !showNavigation && !selectedPlayer && (() => {
           const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
           return (
             <PointDetailCard
@@ -482,6 +512,22 @@ function MapContainer() {
                 setSelectedPoint(null);
                 handleLineSelect(line);
               }}
+            />
+          );
+        })()}
+
+        {/* 玩家详情卡片 */}
+        {selectedPlayer && !showNavigation && (() => {
+          const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
+          const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
+          return (
+            <PlayerDetailCard
+              player={selectedPlayer}
+              nearbyStations={nearbyStations}
+              nearbyLandmarks={nearbyLandmarks}
+              onClose={() => setSelectedPlayer(null)}
+              onStationClick={handleStationClick}
+              onLandmarkClick={handleLandmarkClick}
             />
           );
         })()}
@@ -505,9 +551,11 @@ function MapContainer() {
         <LayerControl
           showRailway={showRailway}
           showLandmark={showLandmark}
+          showPlayers={showPlayers}
           dimBackground={dimBackground}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
+          onTogglePlayers={setShowPlayers}
           onToggleDimBackground={setDimBackground}
         />
       </div>

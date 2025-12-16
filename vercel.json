@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/dynmap/:path*",
+      "destination": "https://satellite.ria.red/map/:path*"
+    }
+  ]
+}

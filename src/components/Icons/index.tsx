@@ -21,6 +21,7 @@ import {
   EyeOff,
   Footprints,
   Route,
+  User,
   type LucideProps,
 } from 'lucide-react';
 
@@ -43,6 +44,7 @@ export {
   EyeOff as EyeOffIcon,
   Footprints as WalkIcon,
   Route as RouteIcon,
+  User as UserIcon,
 };
 
 // 图标 Props 类型
@@ -53,7 +55,7 @@ export type IconProps = LucideProps;
  * 圆形背景 + 中心图标
  */
 interface MapMarkerIconProps {
-  icon: 'landmark' | 'station' | 'walk';
+  icon: 'landmark' | 'station' | 'walk' | 'player';
   color: string;
   size?: number;
 }
@@ -66,6 +68,8 @@ export function getMapMarkerSvg({ icon, color, size = 24 }: MapMarkerIconProps):
     station: `<path d="M8 3.89l4-1.9 4 1.9"/><rect width="14" height="8" x="5" y="8" rx="1"/><circle cx="9" cy="21" r="1"/><circle cx="15" cy="21" r="1"/><path d="M9 16v5"/><path d="M15 16v5"/>`,
     // Footprints 图标路径 (用于步行)
     walk: `<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>`,
+    // User 图标路径 (用于玩家)
+    player: `<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>`,
   };
 
   const iconPath = iconPaths[icon] || iconPaths.landmark;
