@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import L from 'leaflet';
+import * as L from 'leaflet';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 import {
   fetchLandmarkData,
@@ -113,6 +113,7 @@ export function LandmarkLayer({
 
     setLayerGroup(group);
 
+    // 根据 visible 决定是否添加到地图
     if (visible) {
       group.addTo(map);
     }
@@ -122,7 +123,7 @@ export function LandmarkLayer({
         map.removeLayer(group);
       }
     };
-  }, [map, landmarks, projection, onLandmarkClick]);
+  }, [map, landmarks, projection, onLandmarkClick, visible]);
 
   // 控制图层可见性
   useEffect(() => {

@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import L from 'leaflet';
+import * as L from 'leaflet';
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import type { ParsedLine } from '@/types';
 

@@ -3,7 +3,7 @@
  * 使用 BFS/Dijkstra 算法查找最短路径
  */
 
-import type { ParsedLine, ParsedStation, Coordinate } from '@/types';
+import type { ParsedLine, Coordinate } from '@/types';
 
 // 路径节点
 interface PathNode {

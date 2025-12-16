@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import L from 'leaflet';
+import * as L from 'leaflet';
 import type { ParsedLine, ParsedStation } from '@/types';
 import { fetchRailwayData, parseRailwayData } from '@/lib/railwayParser';
 import { DynmapProjection } from '@/lib/DynmapProjection';
@@ -128,6 +128,7 @@ export function RailwayLayer({
 
     setLayerGroup(group);
 
+    // 根据 visible 决定是否添加到地图
     if (visible) {
       group.addTo(map);
     }
@@ -137,7 +138,7 @@ export function RailwayLayer({
         map.removeLayer(group);
       }
     };
-  }, [map, lines, projection, onStationClick]);
+  }, [map, lines, projection, onStationClick, visible]);
 
   // 控制图层可见性
   useEffect(() => {

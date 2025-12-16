@@ -8,7 +8,7 @@
  * 瓦片坐标系统始终以 world_to_map 矩阵变换后的原点为基准。
  */
 
-import L from 'leaflet';
+import * as L from 'leaflet';
 
 export interface DynmapProjectionOptions {
   // 世界坐标 -> 地图坐标 的变换矩阵 (3x3, 行优先)
@@ -246,5 +246,6 @@ export const WORLD_CENTERS = {
  * 获取世界配置
  */
 export function getWorldConfig(worldId: string): DynmapProjectionOptions {
+  void worldId;
   return ZTH_FLAT_CONFIG;
 }

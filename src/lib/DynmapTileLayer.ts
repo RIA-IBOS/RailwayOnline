@@ -5,7 +5,7 @@
  * 处理 Dynmap 特殊的瓦片 URL 生成规则
  */
 
-import L from 'leaflet';
+import * as L from 'leaflet';
 
 export interface DynmapTileLayerOptions extends L.TileLayerOptions {
   // 基础 URL，如 https://satellite.ria.red/tiles/_zth/

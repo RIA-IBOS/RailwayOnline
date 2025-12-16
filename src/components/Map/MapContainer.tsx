@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import L from 'leaflet';
+import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createDynmapCRS, ZTH_FLAT_CONFIG, DynmapProjection } from '@/lib/DynmapProjection';
 import { DynmapTileLayer, createDynmapTileLayer } from '@/lib/DynmapTileLayer';
@@ -10,6 +10,8 @@ import { LineHighlightLayer } from './LineHighlightLayer';
 import { WorldSwitcher } from './WorldSwitcher';
 import { SearchBar } from '../Search/SearchBar';
 import { NavigationPanel } from '../Navigation/NavigationPanel';
+import { LineDetailCard } from '../LineDetail/LineDetailCard';
+import { Toolbar } from '../Toolbar/Toolbar';
 import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwayParser';
 import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
 import type { ParsedStation, ParsedLine, Coordinate } from '@/types';
@@ -156,9 +158,12 @@ function MapContainer() {
       zoom: 2,
       minZoom: 0,
       maxZoom: projection.maxZoom,
-      zoomControl: true,
+      zoomControl: false,  // 禁用默认缩放控件，稍后自定义位置
       attributionControl: true
     });
+
+    // 添加缩放控件到右下角
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     // 添加 Dynmap 瓦片图层
     const tileLayer = createDynmapTileLayer('zth', 'flat');
@@ -182,7 +187,7 @@ function MapContainer() {
     }
 
     // 添加坐标显示控件
-    const coordControl = L.control({ position: 'bottomleft' });
+    const coordControl = new L.Control({ position: 'bottomleft' });
     coordControl.onAdd = function() {
       const div = L.DomUtil.create('div', 'coord-display');
       div.style.cssText = 'background: rgba(255,255,255,0.9); padding: 5px 10px; border-radius: 4px; font-family: monospace; font-size: 12px;';
@@ -241,9 +246,10 @@ function MapContainer() {
         />
       )}
 
-      {/* 标题和搜索 */}
-      <div className="absolute top-4 left-4 z-[1000]">
-        <div className="bg-white/90 px-4 py-2 rounded-lg shadow-lg mb-2">
+      {/* 左侧面板区域 */}
+      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2 max-w-[300px]">
+        {/* 标题和世界切换 */}
+        <div className="bg-white/90 px-4 py-2 rounded-lg shadow-lg">
           <h1 className="text-lg font-bold text-gray-800">RIA 铁路在线地图</h1>
           <WorldSwitcher
             worlds={WORLDS}
@@ -251,6 +257,17 @@ function MapContainer() {
             onWorldChange={handleWorldChange}
           />
         </div>
+
+        {/* 工具栏 */}
+        <Toolbar
+          onNavigationClick={() => setShowNavigation(true)}
+          showRailway={showRailway}
+          showLandmark={showLandmark}
+          onToggleRailway={setShowRailway}
+          onToggleLandmark={setShowLandmark}
+        />
+
+        {/* 搜索栏 */}
         <SearchBar
           stations={stations}
           landmarks={landmarks}
@@ -258,81 +275,45 @@ function MapContainer() {
           onSelect={handleSearchSelect}
           onLineSelect={handleLineSelect}
         />
-      </div>
 
-      {/* 图层控制 */}
-      <div className="absolute top-4 right-4 z-[1000] bg-white/90 px-3 py-2 rounded-lg shadow-lg">
-        <div className="text-xs font-medium text-gray-500 mb-2">图层</div>
-        <label className="flex items-center gap-2 cursor-pointer mb-1">
-          <input
-            type="checkbox"
-            checked={showRailway}
-            onChange={(e) => setShowRailway(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className="text-sm text-gray-700">铁路</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showLandmark}
-            onChange={(e) => setShowLandmark(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className="text-sm text-gray-700">地标</span>
-        </label>
-      </div>
-
-      {/* 导航按钮 */}
-      {!showNavigation && (
-        <button
-          onClick={() => setShowNavigation(true)}
-          className="absolute bottom-20 right-4 z-[1000] bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
-          <span className="text-sm font-medium">路径规划</span>
-        </button>
-      )}
-
-      {/* 清除路径按钮 */}
-      {routePath && routePath.length > 0 && !showNavigation && (
-        <button
-          onClick={() => setRoutePath(null)}
-          className="absolute bottom-8 right-4 z-[1000] bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          <span className="text-sm font-medium">清除路径</span>
-        </button>
-      )}
-
-      {/* 清除线路高亮按钮 */}
-      {highlightedLine && !showNavigation && (
-        <button
-          onClick={() => setHighlightedLine(null)}
-          className="absolute bottom-8 right-4 z-[1000] bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          <span className="text-sm font-medium">清除高亮</span>
-        </button>
-      )}
-
-      {/* 导航面板 */}
-      {showNavigation && (
-        <div className="absolute top-20 right-4 z-[1001]">
+        {/* 路径规划面板 - 展开时隐藏其他内容 */}
+        {showNavigation && (
           <NavigationPanel
             stations={stations}
             lines={lines}
             onRouteFound={handleRouteFound}
             onClose={() => setShowNavigation(false)}
           />
-        </div>
-      )}
+        )}
+
+        {/* 线路详情卡片 - 路径规划打开时隐藏 */}
+        {highlightedLine && !showNavigation && (
+          <LineDetailCard
+            line={highlightedLine}
+            onClose={() => setHighlightedLine(null)}
+            onStationClick={(_name, coord) => {
+              const map = leafletMapRef.current;
+              const proj = projectionRef.current;
+              if (!map || !proj) return;
+              const latLng = proj.locationToLatLng(coord.x, coord.y || 64, coord.z);
+              map.setView(latLng, 5);
+            }}
+          />
+        )}
+
+        {/* 清除路径按钮 - 路径规划打开时隐藏 */}
+        {routePath && routePath.length > 0 && !showNavigation && (
+          <button
+            onClick={() => setRoutePath(null)}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>清除路径</span>
+          </button>
+        )}
+      </div>
 
       {/* 路径高亮图层 */}
       {mapReady && leafletMapRef.current && projectionRef.current && routePath && routePath.length > 0 && (
