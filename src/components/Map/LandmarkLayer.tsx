@@ -101,7 +101,7 @@ export function LandmarkLayer({
       const marker = L.marker(latLng, { icon: houseIcon });
 
       // 地标 tooltip
-      marker.bindTooltip(`<b>${landmark.name}</b><br/>${landmark.grade}`, {
+      marker.bindTooltip(`<b>#${landmark.id} ${landmark.name}</b><br/>${landmark.grade}`, {
         permanent: false,
         direction: 'top',
         offset: [0, -5],
@@ -117,7 +117,7 @@ export function LandmarkLayer({
       // 创建地标弹窗
       const popupContent = `
         <div class="landmark-popup">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px;">${landmark.name}</h3>
+          <h3 style="margin: 0 0 8px 0; font-size: 14px;">#${landmark.id} ${landmark.name}</h3>
           <p style="margin: 0; font-size: 12px;">
             等级: <span style="color: ${color}; font-weight: bold;">${landmark.grade}</span>
           </p>

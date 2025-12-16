@@ -85,7 +85,9 @@ export function PointDetailCard({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               </svg>
             )}
-            <h3 className="font-bold">{selectedPoint.name}</h3>
+            <h3 className="font-bold">
+              {isStation ? selectedPoint.name : `#${selectedPoint.landmark?.id} ${selectedPoint.name}`}
+            </h3>
           </div>
           <p className="text-xs opacity-90 mt-1">
             X: {Math.round(selectedPoint.coord.x)}, Z: {Math.round(selectedPoint.coord.z)}
@@ -177,7 +179,7 @@ export function PointDetailCard({
                   onClick={() => onLandmarkClick?.(landmark)}
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm text-gray-800 truncate block">{landmark.name}</span>
+                    <span className="text-sm text-gray-800 truncate block">#{landmark.id} {landmark.name}</span>
                     <span className="text-xs text-gray-400">{landmark.grade}</span>
                   </div>
                   <span className="text-xs text-gray-400 ml-2">
