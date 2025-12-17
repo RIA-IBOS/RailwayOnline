@@ -3,7 +3,8 @@
  * 包含路径规划等快捷功能图标
  */
 
-import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Pencil } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, ChevronDown, Map, Palette, Pencil } from 'lucide-react';
 import type { MapStyle } from '@/lib/cookies';
 
 interface ToolbarProps {
@@ -70,6 +71,94 @@ export function Toolbar({
           帮助
         </span>
       </button>
+    </div>
+  );
+}
+
+/**
+ * 地图风格选项
+ */
+const MAP_STYLE_OPTIONS: Array<{
+  value: MapStyle;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}> = [
+  { value: 'default', label: '原版', icon: <Map className="w-4 h-4" />, description: '卫星原始渲染' },
+  { value: 'watercolor', label: '淡彩', icon: <Palette className="w-4 h-4" />, description: '柔和水彩风格' },
+  { value: 'sketch', label: '素描', icon: <Pencil className="w-4 h-4" />, description: '手绘地图风格' },
+];
+
+/**
+ * 地图风格下拉选择器
+ */
+interface MapStyleSelectorProps {
+  mapStyle: MapStyle;
+  onToggleMapStyle: (style: MapStyle) => void;
+}
+
+function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const currentStyle = MAP_STYLE_OPTIONS.find(s => s.value === mapStyle) || MAP_STYLE_OPTIONS[0];
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors group relative ${
+          mapStyle !== 'default'
+            ? 'bg-amber-100 text-amber-700'
+            : 'hover:bg-gray-100 text-gray-600'
+        }`}
+        title="地图风格"
+      >
+        {currentStyle.icon}
+        <span className="text-sm hidden sm:inline">{currentStyle.label}</span>
+        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* 下拉菜单 */}
+      {isOpen && (
+        <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+          {MAP_STYLE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => {
+                onToggleMapStyle(option.value);
+                setIsOpen(false);
+              }}
+              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors ${
+                mapStyle === option.value ? 'bg-amber-50 text-amber-700' : 'text-gray-700'
+              }`}
+            >
+              {option.icon}
+              <div className="flex flex-col">
+                <span className={mapStyle === option.value ? 'font-medium' : ''}>{option.label}</span>
+                <span className="text-xs text-gray-400">{option.description}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -220,21 +309,8 @@ export function LayerControl({
         </span>
       </button>
 
-      {/* 素描风格 */}
-      <button
-        onClick={() => onToggleMapStyle(mapStyle === 'default' ? 'sketch' : 'default')}
-        className={`p-2 rounded-lg transition-colors group relative ${
-          mapStyle === 'sketch'
-            ? 'bg-amber-100 text-amber-600'
-            : 'hover:bg-gray-100 text-gray-400'
-        }`}
-        title="素描风格"
-      >
-        <Pencil className="w-5 h-5" />
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          素描风格
-        </span>
-      </button>
+      {/* 地图风格下拉选择器 */}
+      <MapStyleSelector mapStyle={mapStyle} onToggleMapStyle={onToggleMapStyle} />
     </div>
   );
 }

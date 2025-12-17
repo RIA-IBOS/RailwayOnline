@@ -44,6 +44,36 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
   return { h: h * 360, s, l };
 }
 
+/**
+ * HSL 转 RGB
+ */
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  h /= 360;
+
+  if (s === 0) {
+    const gray = Math.round(l * 255);
+    return { r: gray, g: gray, b: gray };
+  }
+
+  const hue2rgb = (p: number, q: number, t: number): number => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+
+  return {
+    r: Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+    g: Math.round(hue2rgb(p, q, h) * 255),
+    b: Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+  };
+}
+
 // ============ 地形分类 ============
 
 type TerrainType = 'water' | 'forest' | 'sand' | 'building' | 'road' | 'default';
@@ -369,4 +399,206 @@ export function createSketchTileLayer(
   }
 
   return new SketchTileLayer(merged);
+}
+
+/**
+ * 淡彩水彩风格瓦片图层类
+ * 保留原图色彩但柔化，添加水彩画效果
+ */
+export class WatercolorTileLayer extends L.TileLayer {
+  private _baseUrl: string;
+  private _prefix: string;
+  private _imageFormat: string;
+  private _extraZoomLevels: number;
+  private _nightAndDay: boolean;
+  private _isNight: boolean;
+
+  constructor(options: DynmapTileLayerOptions) {
+    super('', {
+      ...options,
+      tileSize: 128,
+      zoomReverse: true,
+      detectRetina: false,
+      errorTileUrl: ''
+    });
+
+    this._baseUrl = options.baseUrl;
+    this._prefix = options.prefix;
+    this._imageFormat = options.imageFormat || 'jpg';
+    this._extraZoomLevels = options.extraZoomLevels || 0;
+    this._nightAndDay = options.nightAndDay || false;
+    this._isNight = options.isNight || true;
+  }
+
+  private zoomPrefix(amount: number): string {
+    if (amount === 0) return '';
+    return 'z'.repeat(amount);
+  }
+
+  private getTileInfo(coords: L.Coords): {
+    prefix: string;
+    nightday: string;
+    scaledx: number;
+    scaledy: number;
+    zoom: string;
+    x: number;
+    y: number;
+    fmt: string;
+  } {
+    const maxZoom = this.options.maxZoom || 6;
+    const izoom = maxZoom - coords.z;
+    const zoomoutlevel = Math.max(0, izoom - this._extraZoomLevels);
+    const scale = 1 << zoomoutlevel;
+
+    const x = scale * coords.x;
+    const y = scale * -coords.y;
+
+    return {
+      prefix: this._prefix,
+      nightday: (this._nightAndDay && !this._isNight) ? '_day' : '',
+      scaledx: x >> 5,
+      scaledy: y >> 5,
+      zoom: this.zoomPrefix(zoomoutlevel),
+      x: x,
+      y: y,
+      fmt: this._imageFormat
+    };
+  }
+
+  getTileUrl(coords: L.Coords): string {
+    const info = this.getTileInfo(coords);
+    const zoomPart = info.zoom ? `${info.zoom}_` : '';
+    return `${this._baseUrl}${info.prefix}${info.nightday}/${info.scaledx}_${info.scaledy}/${zoomPart}${info.x}_${info.y}.${info.fmt}`;
+  }
+
+  createTile(coords: L.Coords, done: L.DoneCallback): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        done(new Error('Failed to get canvas context'), canvas);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, 128, 128);
+      this.applyWatercolorFilter(canvas, ctx, coords.x, coords.y);
+      done(undefined, canvas);
+    };
+
+    img.onerror = () => {
+      done(new Error('Tile load failed'), canvas);
+    };
+
+    img.src = this.getTileUrl(coords);
+
+    return canvas;
+  }
+
+  /**
+   * 应用淡彩水彩滤镜
+   * 包含：降低饱和度 + 提高亮度 + 偏暖色调 + 轻微纸张纹理
+   */
+  private applyWatercolorFilter(
+    canvas: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    tileX: number,
+    tileY: number
+  ): void {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const { width, height, data } = imageData;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+
+      // 1. RGB → HSL
+      const { h, s, l } = rgbToHsl(r, g, b);
+
+      // 2. 调整：降低饱和度，提高亮度
+      const newS = s * 0.5;  // 饱和度减半
+      const newL = Math.min(1, l * 0.85 + 0.18);  // 提亮，整体偏白
+
+      // 3. HSL → RGB
+      const { r: nr, g: ng, b: nb } = hslToRgb(h, newS, newL);
+
+      // 4. 偏暖色调
+      data[i] = Math.min(255, nr + 10);      // 红色增加
+      data[i + 1] = Math.min(255, ng + 5);   // 绿色轻微增加
+      data[i + 2] = Math.max(0, nb - 3);     // 蓝色轻微减少
+    }
+
+    // 5. 轻微纸张纹理（比素描风格淡）
+    this.addLightPaperTexture(data, width, height, tileX, tileY);
+
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  /**
+   * 添加轻微纸张纹理
+   */
+  private addLightPaperTexture(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    tileX: number,
+    tileY: number
+  ): void {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+
+        const globalX = tileX * width + x;
+        const globalY = tileY * height + y;
+
+        // 更轻微的噪声
+        const noise1 = seededRandom(globalX * 0.1 + globalY * 0.1) * 4;
+        const noise2 = seededRandom(globalX * 0.05 + globalY * 0.07 + 100) * 2;
+
+        const textureValue = noise1 + noise2 - 3; // 中心化，幅度更小
+
+        data[i] = Math.max(0, Math.min(255, data[i] + textureValue));
+        data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + textureValue));
+        data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + textureValue - 1));
+      }
+    }
+  }
+}
+
+/**
+ * 创建淡彩水彩风格瓦片图层的工厂函数
+ */
+export function createWatercolorTileLayer(
+  worldId: string,
+  mapName: string = 'flat',
+  options?: Partial<DynmapTileLayerOptions>
+): WatercolorTileLayer {
+  const defaultOptions: DynmapTileLayerOptions = {
+    baseUrl: `/api/dynmap/_${worldId}/tiles/world/`,
+    prefix: mapName,
+    imageFormat: 'jpg',
+    extraZoomLevels: 2,
+    maxZoom: 5,
+    maxNativeZoom: 3,
+    minZoom: 0,
+    nightAndDay: false,
+    isNight: true,
+    attribution: '&copy; <a href="https://satellite.ria.red">RIA Satellite</a> | 淡彩风格'
+  };
+
+  const merged: DynmapTileLayerOptions = {
+    ...defaultOptions,
+    ...options
+  };
+
+  if (merged.maxNativeZoom === undefined && typeof merged.maxZoom === 'number') {
+    merged.maxNativeZoom = Math.max(0, merged.maxZoom - (merged.extraZoomLevels || 0));
+  }
+
+  return new WatercolorTileLayer(merged);
 }

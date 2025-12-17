@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { createDynmapCRS, ZTH_FLAT_CONFIG, DynmapProjection } from '@/lib/DynmapProjection';
 import { DynmapTileLayer, createDynmapTileLayer } from '@/lib/DynmapTileLayer';
 import { createSketchTileLayer } from '@/lib/SketchTileLayer';
+import { createWatercolorTileLayer } from '@/lib/SketchTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
 import { PlayerLayer } from './PlayerLayer';
@@ -127,9 +128,14 @@ function MapContainer() {
     }
 
     // 添加新瓦片图层
-    const newTileLayer = mapStyle === 'sketch'
-      ? createSketchTileLayer(currentWorld, 'flat')
-      : createDynmapTileLayer(currentWorld, 'flat');
+    let newTileLayer: L.TileLayer;
+    if (mapStyle === 'sketch') {
+      newTileLayer = createSketchTileLayer(currentWorld, 'flat');
+    } else if (mapStyle === 'watercolor') {
+      newTileLayer = createWatercolorTileLayer(currentWorld, 'flat');
+    } else {
+      newTileLayer = createDynmapTileLayer(currentWorld, 'flat');
+    }
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
   }, [mapStyle, mapReady, currentWorld]);
@@ -355,9 +361,14 @@ function MapContainer() {
     }
 
     // 添加新瓦片图层（根据当前风格选择）
-    const newTileLayer = mapStyle === 'sketch'
-      ? createSketchTileLayer(worldId, 'flat')
-      : createDynmapTileLayer(worldId, 'flat');
+    let newTileLayer: L.TileLayer;
+    if (mapStyle === 'sketch') {
+      newTileLayer = createSketchTileLayer(worldId, 'flat');
+    } else if (mapStyle === 'watercolor') {
+      newTileLayer = createWatercolorTileLayer(worldId, 'flat');
+    } else {
+      newTileLayer = createDynmapTileLayer(worldId, 'flat');
+    }
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
 
@@ -411,9 +422,14 @@ function MapContainer() {
 
     // 添加 Dynmap 瓦片图层 - 使用保存的世界和风格
     const savedMapStyle = loadMapSettings()?.mapStyle ?? 'default';
-    const tileLayer = savedMapStyle === 'sketch'
-      ? createSketchTileLayer(savedWorld, 'flat')
-      : createDynmapTileLayer(savedWorld, 'flat');
+    let tileLayer: L.TileLayer;
+    if (savedMapStyle === 'sketch') {
+      tileLayer = createSketchTileLayer(savedWorld, 'flat');
+    } else if (savedMapStyle === 'watercolor') {
+      tileLayer = createWatercolorTileLayer(savedWorld, 'flat');
+    } else {
+      tileLayer = createDynmapTileLayer(savedWorld, 'flat');
+    }
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 

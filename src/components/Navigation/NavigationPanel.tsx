@@ -354,7 +354,7 @@ export function NavigationPanel({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-80 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <h3 className="font-bold text-gray-800">路径规划</h3>

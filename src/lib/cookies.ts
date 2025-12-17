@@ -2,7 +2,7 @@
  * Cookie 工具函数
  */
 
-export type MapStyle = 'default' | 'sketch';
+export type MapStyle = 'default' | 'watercolor' | 'sketch';
 
 export interface MapSettings {
   currentWorld: string;
