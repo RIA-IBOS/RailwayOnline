@@ -2,22 +2,44 @@
  * 导航面板组件
  * 提供起终点搜索和路径规划功能
  * 支持站点和地标作为起终点
+ * 支持多种交通模式：铁路、传送、步行、自动
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { X, ArrowUpDown, Train, Home, Footprints, User } from 'lucide-react';
-import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
+import { X, ArrowUpDown, Train, Home, Footprints, User, Sparkles, Zap, Clock, Rocket, Shield } from 'lucide-react';
+import type { ParsedStation, ParsedLine, Coordinate, Player, TravelMode } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
-import { buildRailwayGraph, findShortestPath, simplifyPath, PathResult } from '@/lib/pathfinding';
+import {
+  buildRailwayGraph,
+  simplifyPath,
+  findAutoPath,
+  findRailOnlyPath,
+  findWalkPath,
+  calculateEstimatedTime,
+  calculateElytraConsumption,
+  calculateWalkTime,
+  calculateRailTime,
+  MultiModePathResult,
+} from '@/lib/pathfinding';
+import { findTeleportPath, extractToriiList } from '@/lib/toriiTeleport';
+
+// 格式化时间显示
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}秒`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return secs > 0 ? `${mins}分${secs}秒` : `${mins}分钟`;
+}
 
 interface NavigationPanelProps {
   stations: ParsedStation[];
   lines: ParsedLine[];
   landmarks: ParsedLandmark[];
-  players?: Player[];  // 在线玩家列表
+  players?: Player[];
+  worldId: string;  // 当前世界 ID
   onRouteFound?: (path: Array<{ coord: Coordinate }>) => void;
   onClose: () => void;
-  onPointClick?: (coord: Coordinate) => void;  // 点击起点/终点跳转
+  onPointClick?: (coord: Coordinate) => void;
 }
 
 // 搜索项类型
@@ -27,33 +49,17 @@ interface SearchItem {
   coord: Coordinate;
 }
 
-// 计算两点间距离
-function getDistance(a: Coordinate, b: Coordinate): number {
-  const dx = a.x - b.x;
-  const dz = a.z - b.z;
-  return Math.sqrt(dx * dx + dz * dz);
-}
-
-// 找到最近的站点
-function findNearestStation(
-  coord: Coordinate,
-  stations: ParsedStation[]
-): ParsedStation | null {
-  if (stations.length === 0) return null;
-
-  let nearest = stations[0];
-  let minDist = getDistance(coord, stations[0].coord);
-
-  for (const station of stations) {
-    const dist = getDistance(coord, station.coord);
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = station;
-    }
-  }
-
-  return nearest;
-}
+// 模式配置
+const TRAVEL_MODES: Array<{
+  mode: TravelMode;
+  label: string;
+  icon: typeof Train;
+}> = [
+  { mode: 'auto', label: '自动', icon: Sparkles },
+  { mode: 'rail', label: '铁路', icon: Train },
+  { mode: 'teleport', label: '传送', icon: Zap },
+  { mode: 'walk', label: '步行', icon: Footprints },
+];
 
 // 搜索输入组件
 interface PointSearchInputProps {
@@ -153,42 +159,22 @@ function PointSearchInput({ value, onChange, items, placeholder, label }: PointS
   );
 }
 
-// 完整路线结果
-interface FullRouteResult {
-  found: boolean;
-  // 起点步行
-  walkStart?: {
-    from: SearchItem;
-    to: ParsedStation;
-    distance: number;
-  };
-  // 铁路路线
-  railPath?: PathResult;
-  // 终点步行
-  walkEnd?: {
-    from: ParsedStation;
-    to: SearchItem;
-    distance: number;
-  };
-  // 总距离
-  totalDistance: number;
-  // 总换乘
-  totalTransfers: number;
-}
-
 export function NavigationPanel({
   stations,
   lines,
   landmarks,
   players = [],
+  worldId,
   onRouteFound,
   onClose,
   onPointClick,
 }: NavigationPanelProps) {
   const [startPoint, setStartPoint] = useState<SearchItem | null>(null);
   const [endPoint, setEndPoint] = useState<SearchItem | null>(null);
+  const [travelMode, setTravelMode] = useState<TravelMode>('auto');
   const [preferLessTransfer, setPreferLessTransfer] = useState(true);
-  const [result, setResult] = useState<FullRouteResult | null>(null);
+  const [useElytra, setUseElytra] = useState(true);  // 是否使用鞘翅飞行
+  const [result, setResult] = useState<MultiModePathResult | null>(null);
   const [searching, setSearching] = useState(false);
 
   // 格式化线路显示名称
@@ -198,12 +184,6 @@ export function NavigationPanel({
       return line.bureau === 'RMP' ? line.line : `${line.bureau}-${line.line}`;
     }
     return lineId;
-  };
-
-  // 根据站点名查找坐标
-  const findStationCoord = (stationName: string): Coordinate | null => {
-    const station = stations.find(s => s.name === stationName);
-    return station?.coord || null;
   };
 
   // 构建搜索项列表（站点 + 地标 + 玩家）
@@ -246,14 +226,25 @@ export function NavigationPanel({
     return items;
   }, [stations, landmarks, players]);
 
+  // 构建铁路图（缓存）
+  const railwayGraph = useMemo(() => buildRailwayGraph(lines), [lines]);
+
+  // 提取鸟居列表（缓存）
+  const toriiList = useMemo(() => extractToriiList(landmarks), [landmarks]);
+
   // 搜索路径
   const handleSearch = () => {
     if (!startPoint || !endPoint) return;
     if (startPoint.name === endPoint.name) {
       setResult({
         found: false,
-        totalDistance: 0,
+        mode: 'walk',
+        segments: [],
+        totalWalkDistance: 0,
+        totalRailDistance: 0,
         totalTransfers: 0,
+        teleportCount: 0,
+        reverseTeleportCount: 0,
       });
       return;
     }
@@ -261,129 +252,91 @@ export function NavigationPanel({
     setSearching(true);
 
     setTimeout(() => {
-      // 确定起点站和终点站
-      let startStation: ParsedStation | null = null;
-      let endStation: ParsedStation | null = null;
-      let walkStartDist = 0;
-      let walkEndDist = 0;
+      let pathResult: MultiModePathResult;
 
-      if (startPoint.type === 'station') {
-        startStation = stations.find(s => s.name === startPoint.name) || null;
-      } else {
-        // 地标或玩家：找最近站点
-        startStation = findNearestStation(startPoint.coord, stations);
-        if (startStation) {
-          walkStartDist = getDistance(startPoint.coord, startStation.coord);
-        }
-      }
+      switch (travelMode) {
+        case 'walk':
+          pathResult = findWalkPath(startPoint.coord, endPoint.coord);
+          break;
 
-      if (endPoint.type === 'station') {
-        endStation = stations.find(s => s.name === endPoint.name) || null;
-      } else {
-        // 地标或玩家：找最近站点
-        endStation = findNearestStation(endPoint.coord, stations);
-        if (endStation) {
-          walkEndDist = getDistance(endPoint.coord, endStation.coord);
-        }
-      }
-
-      if (!startStation || !endStation) {
-        setResult({ found: false, totalDistance: 0, totalTransfers: 0 });
-        setSearching(false);
-        return;
-      }
-
-      // 如果起终点是同一站
-      if (startStation.name === endStation.name) {
-        const fullResult: FullRouteResult = {
-          found: true,
-          totalDistance: walkStartDist + walkEndDist,
-          totalTransfers: 0,
-        };
-
-        if (walkStartDist > 0) {
-          fullResult.walkStart = {
-            from: startPoint,
-            to: startStation,
-            distance: walkStartDist,
+        case 'teleport':
+          const teleportPath = findTeleportPath(startPoint.coord, endPoint.coord, toriiList, worldId);
+          // 转换为 MultiModePathResult
+          let reverseTeleportCount = 0;
+          const teleportSegments = teleportPath.segments.map(seg => {
+            if (seg.type === 'teleport' && seg.torii) {
+              const isReverse = seg.destinationName === seg.torii.name;
+              if (isReverse) reverseTeleportCount++;
+              return {
+                type: 'teleport' as const,
+                torii: seg.torii,
+                destination: seg.to,
+                destinationName: seg.destinationName || '传送点',
+                isReverse,
+              };
+            }
+            return {
+              type: 'walk' as const,
+              from: seg.from,
+              to: seg.to,
+              distance: seg.distance,
+            };
+          });
+          pathResult = {
+            found: teleportPath.found,
+            mode: 'teleport',
+            segments: teleportSegments,
+            totalWalkDistance: teleportPath.totalWalkDistance,
+            totalRailDistance: 0,
+            totalTransfers: 0,
+            teleportCount: teleportPath.teleportCount - reverseTeleportCount,
+            reverseTeleportCount,
           };
-        }
-        if (walkEndDist > 0) {
-          fullResult.walkEnd = {
-            from: startStation,
-            to: endPoint,
-            distance: walkEndDist,
-          };
-        }
+          break;
 
-        setResult(fullResult);
-        setSearching(false);
+        case 'rail':
+          pathResult = findRailOnlyPath(
+            startPoint.coord,
+            endPoint.coord,
+            railwayGraph,
+            stations,
+            preferLessTransfer
+          );
+          break;
 
-        // 通知路径
-        if (onRouteFound) {
-          const path: Array<{ coord: Coordinate }> = [{ coord: startPoint.coord }];
-          if (startStation) path.push({ coord: startStation.coord });
-          path.push({ coord: endPoint.coord });
-          onRouteFound(path);
-        }
-        return;
+        case 'auto':
+        default:
+          pathResult = findAutoPath(
+            startPoint.coord,
+            endPoint.coord,
+            railwayGraph,
+            landmarks,
+            stations,
+            worldId,
+            preferLessTransfer
+          );
+          break;
       }
 
-      // 构建图并搜索铁路路径
-      const graph = buildRailwayGraph(lines);
-      const railResult = findShortestPath(graph, startStation.name, endStation.name, preferLessTransfer);
-
-      if (!railResult.found) {
-        setResult({ found: false, totalDistance: 0, totalTransfers: 0 });
-        setSearching(false);
-        return;
-      }
-
-      // 构建完整结果
-      const fullResult: FullRouteResult = {
-        found: true,
-        railPath: railResult,
-        totalDistance: walkStartDist + railResult.totalDistance + walkEndDist,
-        totalTransfers: railResult.transfers,
-      };
-
-      if (walkStartDist > 0) {
-        fullResult.walkStart = {
-          from: startPoint,
-          to: startStation,
-          distance: walkStartDist,
-        };
-      }
-      if (walkEndDist > 0) {
-        fullResult.walkEnd = {
-          from: endStation,
-          to: endPoint,
-          distance: walkEndDist,
-        };
-      }
-
-      setResult(fullResult);
+      setResult(pathResult);
       setSearching(false);
 
-      // 通知路径（包含步行路段）
-      if (onRouteFound) {
+      // 通知路径
+      if (onRouteFound && pathResult.found) {
         const path: Array<{ coord: Coordinate }> = [];
-
-        // 起点步行
-        if (fullResult.walkStart) {
-          path.push({ coord: startPoint.coord });
+        for (const segment of pathResult.segments) {
+          if (segment.type === 'walk') {
+            path.push({ coord: segment.from });
+            path.push({ coord: segment.to });
+          } else if (segment.type === 'rail') {
+            for (const node of segment.railPath.path) {
+              path.push({ coord: node.coord });
+            }
+          } else if (segment.type === 'teleport') {
+            path.push({ coord: segment.torii.coord });
+            path.push({ coord: segment.destination });
+          }
         }
-
-        // 铁路路径
-        for (const node of railResult.path) {
-          path.push({ coord: node.coord });
-        }
-
-        // 终点步行
-        if (fullResult.walkEnd) {
-          path.push({ coord: endPoint.coord });
-        }
-
         onRouteFound(path);
       }
     }, 0);
@@ -397,11 +350,8 @@ export function NavigationPanel({
     setResult(null);
   };
 
-  // 简化铁路路径显示
-  const railSegments = result?.railPath?.found ? simplifyPath(result.railPath.path) : [];
-
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg w-full sm:w-80 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <h3 className="font-bold text-gray-800">路径规划</h3>
@@ -411,6 +361,24 @@ export function NavigationPanel({
         >
           <X className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* 模式选择标签栏 */}
+      <div className="flex border-b">
+        {TRAVEL_MODES.map(({ mode, label, icon: Icon }) => (
+          <button
+            key={mode}
+            className={`flex-1 py-2 px-1 flex flex-col items-center gap-0.5 text-xs transition-colors ${
+              travelMode === mode
+                ? 'text-blue-600 border-b-2 border-blue-500 bg-blue-50'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+            onClick={() => { setTravelMode(mode); setResult(null); }}
+          >
+            <Icon className="w-4 h-4" />
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* 输入区域 */}
@@ -444,19 +412,35 @@ export function NavigationPanel({
           />
         </div>
 
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer text-xs">
-            <input
-              type="checkbox"
-              checked={preferLessTransfer}
-              onChange={(e) => {
-                setPreferLessTransfer(e.target.checked);
-                setResult(null);
-              }}
-              className="w-3 h-3"
-            />
-            <span className="text-gray-600">少换乘</span>
-          </label>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            {(travelMode === 'rail' || travelMode === 'auto') && (
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                <input
+                  type="checkbox"
+                  checked={preferLessTransfer}
+                  onChange={(e) => {
+                    setPreferLessTransfer(e.target.checked);
+                    setResult(null);
+                  }}
+                  className="w-3 h-3"
+                />
+                <span className="text-gray-600">少换乘</span>
+              </label>
+            )}
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={useElytra}
+                onChange={(e) => {
+                  setUseElytra(e.target.checked);
+                  setResult(null);
+                }}
+                className="w-3 h-3"
+              />
+              <span className="text-gray-600">鞘翅</span>
+            </label>
+          </div>
 
           <button
             onClick={handleSearch}
@@ -474,129 +458,229 @@ export function NavigationPanel({
           {result.found ? (
             <>
               {/* 统计信息 */}
-              <div className="flex items-center gap-3 mb-3 text-xs">
+              <div className="flex items-center gap-3 mb-3 text-xs flex-wrap">
+                {/* 预估时间 */}
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-500">换乘:</span>
-                  <span className="font-medium text-blue-600">{result.totalTransfers}次</span>
+                  <Clock className="w-3 h-3 text-gray-400" />
+                  <span className="text-gray-500">预计:</span>
+                  <span className="font-medium text-orange-600">{formatTime(calculateEstimatedTime(result, useElytra))}</span>
                 </div>
+                {result.totalTransfers > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">换乘:</span>
+                    <span className="font-medium text-blue-600">{result.totalTransfers}次</span>
+                  </div>
+                )}
+                {result.teleportCount > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">传送:</span>
+                    <span className="font-medium text-purple-600">{result.teleportCount}次</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-500">总距离:</span>
-                  <span className="font-medium">{Math.round(result.totalDistance)}m</span>
+                  <span className="text-gray-500">{useElytra ? '飞行' : '步行'}:</span>
+                  <span className="font-medium">{Math.round(result.totalWalkDistance)}m</span>
                 </div>
+                {result.totalRailDistance > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">铁路:</span>
+                    <span className="font-medium">{Math.round(result.totalRailDistance)}m</span>
+                  </div>
+                )}
               </div>
+
+              {/* 鞘翅消耗信息 */}
+              {useElytra && result.totalWalkDistance > 0 && (() => {
+                const consumption = calculateElytraConsumption(result.totalWalkDistance);
+                return (
+                  <div className="bg-amber-50 rounded p-2 mb-3 text-xs">
+                    <div className="flex items-center gap-1 mb-1 text-amber-700 font-medium">
+                      <Rocket className="w-3 h-3" />
+                      <span>鞘翅飞行消耗</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Rocket className="w-3 h-3 text-red-500" />
+                        <span>烟花: </span>
+                        <span className="font-medium text-red-600">~{consumption.fireworksUsed}个</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Shield className="w-3 h-3 text-cyan-500" />
+                        <span>耐久: </span>
+                        <span className="font-medium text-cyan-600">
+                          {Math.round(consumption.durabilityUsed / 432 * 100)}%
+                        </span>
+                        <span className="text-gray-400">
+                          ({Math.round(consumption.durabilityUsedUnbreaking / 432 * 100)}% 耐久III)
+                        </span>
+                      </div>
+                    </div>
+                    {consumption.elytraCount > 1 && (
+                      <div className="mt-1 text-amber-600">
+                        ⚠️ 需要 {consumption.elytraCount} 个鞘翅（或 {consumption.elytraCountUnbreaking} 个耐久III鞘翅）
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* 路线详情 */}
               <div className="space-y-2">
-                {/* 起点步行 */}
-                {result.walkStart && (
-                  <div className="relative pl-5">
-                    <div className="absolute left-[7px] top-0 bottom-0 w-0.5 bg-gray-300 border-dashed" style={{ borderLeft: '2px dashed #ccc', width: 0 }} />
-                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-green-500 text-white flex items-center justify-center">
-                      <Footprints className="w-2.5 h-2.5" />
-                    </div>
-                    <div className="bg-green-50 rounded p-2">
-                      <div className="text-[10px] text-green-600 font-medium mb-0.5">
-                        步行 {Math.round(result.walkStart.distance)}m
-                      </div>
-                      <div className="text-xs text-gray-800">
-                        <button
-                          className="text-green-700 hover:underline"
-                          onClick={() => onPointClick?.(result.walkStart!.from.coord)}
-                        >
-                          {result.walkStart.from.name}
-                        </button>
-                        <span className="text-gray-400 mx-1">→</span>
-                        <button
-                          className="text-green-700 hover:underline"
-                          onClick={() => onPointClick?.(result.walkStart!.to.coord)}
-                        >
-                          {result.walkStart.to.name}站
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 铁路路线 */}
-                {railSegments.map((segment, index) => (
-                  <div key={index} className="relative pl-5">
-                    {/* 连接线 */}
-                    {(index < railSegments.length - 1 || result.walkEnd) && (
-                      <div className="absolute left-[7px] top-5 bottom-0 w-0.5 bg-gray-200" />
-                    )}
-
-                    {/* 线路标识 */}
-                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center">
-                      {index + 1}
-                    </div>
-
-                    {/* 线路信息 */}
-                    <div className="bg-gray-50 rounded p-2">
-                      <div className="text-[10px] text-blue-600 font-medium mb-0.5">
-                        {formatLineName(segment.lineId)}
-                      </div>
-                      <div className="text-xs text-gray-800">
-                        <button
-                          className="hover:underline hover:text-blue-600"
-                          onClick={() => {
-                            const coord = findStationCoord(segment.stations[0]);
-                            if (coord) onPointClick?.(coord);
-                          }}
-                        >
-                          {segment.stations[0]}
-                        </button>
-                        {segment.stations.length > 2 && (
-                          <span className="text-gray-400 mx-1">
-                            → {segment.stations.length - 2}站 →
-                          </span>
+                {result.segments.map((segment, index) => {
+                  if (segment.type === 'walk') {
+                    const walkTime = calculateWalkTime(segment.distance, useElytra);
+                    return (
+                      <div key={index} className="relative pl-5">
+                        {index < result.segments.length - 1 && (
+                          <div className="absolute left-[7px] top-5 bottom-0 w-0.5 bg-gray-200" />
                         )}
-                        {segment.stations.length === 2 && (
-                          <span className="text-gray-400 mx-1">→</span>
-                        )}
-                        {segment.stations.length > 1 && (
-                          <button
-                            className="hover:underline hover:text-blue-600"
-                            onClick={() => {
-                              const coord = findStationCoord(segment.stations[segment.stations.length - 1]);
-                              if (coord) onPointClick?.(coord);
-                            }}
-                          >
-                            {segment.stations[segment.stations.length - 1]}
-                          </button>
-                        )}
+                        <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-green-500 text-white flex items-center justify-center">
+                          <Footprints className="w-2.5 h-2.5" />
+                        </div>
+                        <div className="bg-green-50 rounded p-2">
+                          <div className="text-[10px] text-green-600 font-medium mb-0.5">
+                            {useElytra ? '飞行' : '步行'} {Math.round(segment.distance)}m
+                            <span className="text-gray-400 ml-1">({formatTime(walkTime)})</span>
+                          </div>
+                          <div className="text-xs text-gray-800">
+                            <button
+                              className="text-green-700 hover:underline"
+                              onClick={() => onPointClick?.(segment.from)}
+                            >
+                              ({Math.round(segment.from.x)}, {Math.round(segment.from.z)})
+                            </button>
+                            <span className="text-gray-400 mx-1">→</span>
+                            <button
+                              className="text-green-700 hover:underline"
+                              onClick={() => onPointClick?.(segment.to)}
+                            >
+                              ({Math.round(segment.to.x)}, {Math.round(segment.to.z)})
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  }
 
-                {/* 终点步行 */}
-                {result.walkEnd && (
-                  <div className="relative pl-5">
-                    <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center">
-                      <Footprints className="w-2.5 h-2.5" />
-                    </div>
-                    <div className="bg-red-50 rounded p-2">
-                      <div className="text-[10px] text-red-600 font-medium mb-0.5">
-                        步行 {Math.round(result.walkEnd.distance)}m
+                  if (segment.type === 'teleport') {
+                    // 判断是正向传送（鸟居→中转点）还是反向传送（中转点→鸟居）
+                    const isReverseTP = segment.isReverse || segment.destinationName === segment.torii.name;
+                    const toriiLabel = `#${segment.torii.id} ${segment.torii.name}`;
+
+                    let fromName: string;
+                    let toName: string;
+
+                    if (isReverseTP) {
+                      // 反向传送：从中转点传送到鸟居
+                      const prevSegment = index > 0 ? result.segments[index - 1] : null;
+                      if (prevSegment?.type === 'teleport') {
+                        fromName = prevSegment.destinationName;
+                      } else {
+                        // 找不到上一个传送段，使用默认名称
+                        fromName = segment.destinationName !== segment.torii.name
+                          ? segment.destinationName
+                          : '中转点';
+                      }
+                      toName = toriiLabel;
+                    } else {
+                      // 正向传送：任意位置 → 中转点（海风湾/世界中心）
+                      // 显示鸟居编号作为参考
+                      fromName = `任意位置 (${toriiLabel})`;
+                      toName = segment.destinationName;
+                    }
+
+                    return (
+                      <div key={index} className="relative pl-5">
+                        {index < result.segments.length - 1 && (
+                          <div className="absolute left-[7px] top-5 bottom-0 w-0.5 bg-gray-200" />
+                        )}
+                        <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-purple-500 text-white flex items-center justify-center">
+                          <Zap className="w-2.5 h-2.5" />
+                        </div>
+                        <div className="bg-purple-50 rounded p-2">
+                          <div className="text-[10px] text-purple-600 font-medium mb-0.5">
+                            传送 → {toName}
+                            {isReverseTP && <span className="text-gray-400 ml-1">(+30秒)</span>}
+                          </div>
+                          <div className="text-xs text-gray-800">
+                            <button
+                              className="text-purple-700 hover:underline"
+                              onClick={() => onPointClick?.(isReverseTP ? segment.destination : segment.torii.coord)}
+                            >
+                              {fromName}
+                            </button>
+                            <span className="text-gray-400 mx-1">→</span>
+                            <button
+                              className="text-purple-700 hover:underline"
+                              onClick={() => onPointClick?.(isReverseTP ? segment.torii.coord : segment.destination)}
+                            >
+                              {toName}
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-800">
-                        <button
-                          className="text-red-700 hover:underline"
-                          onClick={() => onPointClick?.(result.walkEnd!.from.coord)}
-                        >
-                          {result.walkEnd.from.name}站
-                        </button>
-                        <span className="text-gray-400 mx-1">→</span>
-                        <button
-                          className="text-red-700 hover:underline"
-                          onClick={() => onPointClick?.(result.walkEnd!.to.coord)}
-                        >
-                          {result.walkEnd.to.name}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    );
+                  }
+
+                  if (segment.type === 'rail') {
+                    const railSegments = simplifyPath(segment.railPath.path);
+                    // 计算每段的大致距离（基于总距离/段数的简化估算）
+                    const totalRailDist = segment.railPath.totalDistance;
+                    const avgDistPerSeg = railSegments.length > 0 ? totalRailDist / railSegments.length : 0;
+
+                    return railSegments.map((railSeg, railIndex) => {
+                      // 计算此段的距离（简化：使用起终点坐标估算）
+                      const segDist = Math.sqrt(
+                        Math.pow(railSeg.endCoord.x - railSeg.startCoord.x, 2) +
+                        Math.pow(railSeg.endCoord.z - railSeg.startCoord.z, 2)
+                      );
+                      const segTime = calculateRailTime(segDist || avgDistPerSeg);
+
+                      return (
+                        <div key={`${index}-${railIndex}`} className="relative pl-5">
+                          {(railIndex < railSegments.length - 1 || index < result.segments.length - 1) && (
+                            <div className="absolute left-[7px] top-5 bottom-0 w-0.5 bg-gray-200" />
+                          )}
+                          <div className="absolute left-0 top-0.5 w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center">
+                            <Train className="w-2.5 h-2.5" />
+                          </div>
+                          <div className="bg-blue-50 rounded p-2">
+                            <div className="text-[10px] text-blue-600 font-medium mb-0.5">
+                              {formatLineName(railSeg.lineId)}
+                              <span className="text-gray-400 ml-1">({formatTime(segTime)})</span>
+                            </div>
+                            <div className="text-xs text-gray-800">
+                              <button
+                                className="hover:underline hover:text-blue-600"
+                                onClick={() => onPointClick?.(railSeg.startCoord)}
+                              >
+                                {railSeg.stations[0]}
+                              </button>
+                              {railSeg.stations.length > 2 && (
+                                <span className="text-gray-400 mx-1">
+                                  → {railSeg.stations.length - 2}站 →
+                                </span>
+                              )}
+                              {railSeg.stations.length === 2 && (
+                                <span className="text-gray-400 mx-1">→</span>
+                              )}
+                              {railSeg.stations.length > 1 && (
+                                <button
+                                  className="hover:underline hover:text-blue-600"
+                                  onClick={() => onPointClick?.(railSeg.endCoord)}
+                                >
+                                  {railSeg.stations[railSeg.stations.length - 1]}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  }
+
+                  return null;
+                })}
               </div>
             </>
           ) : (

@@ -500,6 +500,7 @@ function MapContainer() {
             lines={lines}
             landmarks={landmarks}
             players={players}
+            worldId={currentWorld}
             onRouteFound={handleRouteFound}
             onClose={() => setShowNavigation(false)}
             onPointClick={(coord) => {

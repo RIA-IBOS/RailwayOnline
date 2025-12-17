@@ -130,3 +130,13 @@ export interface Player {
   armor: number;
   world: string;
 }
+
+// 交通模式
+export type TravelMode = 'auto' | 'rail' | 'teleport' | 'walk';
+
+// 鸟居传送点
+export interface Torii {
+  id: number;
+  name: string;
+  coord: Coordinate;
+}

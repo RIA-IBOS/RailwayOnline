@@ -3,7 +3,7 @@
  * 使用 BFS/Dijkstra 算法查找最短路径
  */
 
-import type { ParsedLine, Coordinate, Station } from '@/types';
+import type { ParsedLine, Coordinate, Station, ParsedStation, Torii } from '@/types';
 
 // 路径节点
 interface PathNode {
@@ -464,3 +464,402 @@ export function simplifyPath(path: PathNode[]): Array<{
 
   return segments;
 }
+
+// ============== 多模式路径规划 ==============
+
+import {
+  findTeleportPath,
+  extractToriiList,
+} from './toriiTeleport';
+import type { TeleportPathResult } from './toriiTeleport';
+import type { ParsedLandmark } from './landmarkParser';
+
+// 多模式路径段
+export type MultiModeSegment =
+  | { type: 'walk'; from: Coordinate; to: Coordinate; distance: number }
+  | { type: 'rail'; railPath: PathResult; simplified: ReturnType<typeof simplifyPath> }
+  | { type: 'teleport'; torii: Torii; destination: Coordinate; destinationName: string; isReverse?: boolean };
+
+// 多模式路径结果
+export interface MultiModePathResult {
+  found: boolean;
+  mode: 'rail' | 'teleport' | 'walk' | 'mixed';
+  segments: MultiModeSegment[];
+  totalWalkDistance: number;
+  totalRailDistance: number;
+  totalTransfers: number;
+  teleportCount: number;
+  reverseTeleportCount: number;  // 反向传送次数
+}
+
+/**
+ * 计算纯步行路径
+ */
+export function findWalkPath(
+  start: Coordinate,
+  end: Coordinate
+): MultiModePathResult {
+  const dx = start.x - end.x;
+  const dz = start.z - end.z;
+  const distance = Math.sqrt(dx * dx + dz * dz);
+
+  return {
+    found: true,
+    mode: 'walk',
+    segments: [{
+      type: 'walk',
+      from: start,
+      to: end,
+      distance,
+    }],
+    totalWalkDistance: distance,
+    totalRailDistance: 0,
+    totalTransfers: 0,
+    teleportCount: 0,
+    reverseTeleportCount: 0,
+  };
+}
+
+/**
+ * 将传送路径结果转换为多模式路径结果
+ */
+function teleportToMultiMode(result: TeleportPathResult): MultiModePathResult {
+  const segments: MultiModeSegment[] = [];
+  let reverseTeleportCount = 0;
+
+  for (const seg of result.segments) {
+    if (seg.type === 'teleport' && seg.torii) {
+      // 判断是否为反向传送（目的地名称与鸟居名称相同）
+      const isReverse = seg.destinationName === seg.torii.name;
+      if (isReverse) {
+        reverseTeleportCount++;
+      }
+      segments.push({
+        type: 'teleport',
+        torii: seg.torii,
+        destination: seg.to,
+        destinationName: seg.destinationName || '传送点',
+        isReverse,
+      });
+    } else {
+      // 步行段
+      segments.push({
+        type: 'walk',
+        from: seg.from,
+        to: seg.to,
+        distance: seg.distance,
+      });
+    }
+  }
+
+  return {
+    found: result.found,
+    mode: result.teleportCount > 0 ? 'teleport' : 'walk',
+    segments,
+    totalWalkDistance: result.totalWalkDistance,
+    totalRailDistance: 0,
+    totalTransfers: 0,
+    teleportCount: result.teleportCount - reverseTeleportCount,  // 正向传送次数
+    reverseTeleportCount,  // 反向传送次数
+  };
+}
+
+/**
+ * 计算纯铁路路径（带起终点步行）
+ */
+export function findRailOnlyPath(
+  start: Coordinate,
+  end: Coordinate,
+  graph: Map<string, GraphNode>,
+  stations: ParsedStation[],
+  preferLessTransfer: boolean = true
+): MultiModePathResult {
+  // 找最近的起点站
+  const startStation = findNearestStation(start, stations);
+  const endStation = findNearestStation(end, stations);
+
+  if (!startStation || !endStation) {
+    return {
+      found: false,
+      mode: 'rail',
+      segments: [],
+      totalWalkDistance: 0,
+      totalRailDistance: 0,
+      totalTransfers: 0,
+      teleportCount: 0,
+      reverseTeleportCount: 0,
+    };
+  }
+
+  const segments: MultiModeSegment[] = [];
+  let totalWalkDistance = 0;
+
+  // 起点步行到车站
+  const walkToStart = getDistanceCoord(start, startStation.coord);
+  if (walkToStart > 0) {
+    segments.push({
+      type: 'walk',
+      from: start,
+      to: startStation.coord,
+      distance: walkToStart,
+    });
+    totalWalkDistance += walkToStart;
+  }
+
+  // 铁路规划
+  if (startStation.name !== endStation.name) {
+    const railResult = findShortestPath(graph, startStation.name, endStation.name, preferLessTransfer);
+
+    if (!railResult.found) {
+      return {
+        found: false,
+        mode: 'rail',
+        segments: [],
+        totalWalkDistance: 0,
+        totalRailDistance: 0,
+        totalTransfers: 0,
+        teleportCount: 0,
+        reverseTeleportCount: 0,
+      };
+    }
+
+    segments.push({
+      type: 'rail',
+      railPath: railResult,
+      simplified: simplifyPath(railResult.path),
+    });
+
+    // 终点步行
+    const walkFromEnd = getDistanceCoord(endStation.coord, end);
+    if (walkFromEnd > 0) {
+      segments.push({
+        type: 'walk',
+        from: endStation.coord,
+        to: end,
+        distance: walkFromEnd,
+      });
+      totalWalkDistance += walkFromEnd;
+    }
+
+    return {
+      found: true,
+      mode: 'rail',
+      segments,
+      totalWalkDistance,
+      totalRailDistance: railResult.totalDistance,
+      totalTransfers: railResult.transfers,
+      teleportCount: 0,
+      reverseTeleportCount: 0,
+    };
+  } else {
+    // 起终点最近站相同，直接步行
+    const walkFromEnd = getDistanceCoord(startStation.coord, end);
+    if (walkFromEnd > 0) {
+      segments.push({
+        type: 'walk',
+        from: startStation.coord,
+        to: end,
+        distance: walkFromEnd,
+      });
+      totalWalkDistance += walkFromEnd;
+    }
+
+    return {
+      found: true,
+      mode: 'walk',
+      segments,
+      totalWalkDistance,
+      totalRailDistance: 0,
+      totalTransfers: 0,
+      teleportCount: 0,
+      reverseTeleportCount: 0,
+    };
+  }
+}
+
+/**
+ * 计算两点距离
+ */
+function getDistanceCoord(a: Coordinate, b: Coordinate): number {
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+/**
+ * 找到最近的站点
+ */
+function findNearestStation(
+  coord: Coordinate,
+  stations: ParsedStation[]
+): ParsedStation | null {
+  if (stations.length === 0) return null;
+
+  let nearest = stations[0];
+  let minDist = getDistanceCoord(coord, stations[0].coord);
+
+  for (const station of stations) {
+    const dist = getDistanceCoord(coord, station.coord);
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = station;
+    }
+  }
+
+  return nearest;
+}
+
+/**
+ * 自动模式：比较多种方案选最优
+ */
+export function findAutoPath(
+  start: Coordinate,
+  end: Coordinate,
+  graph: Map<string, GraphNode>,
+  landmarks: ParsedLandmark[],
+  stations: ParsedStation[],
+  worldId: string,
+  preferLessTransfer: boolean = true
+): MultiModePathResult {
+  const toriiList = extractToriiList(landmarks);
+
+  // 方案1：纯步行
+  const walkResult = findWalkPath(start, end);
+
+  // 方案2：纯铁路
+  const railResult = findRailOnlyPath(start, end, graph, stations, preferLessTransfer);
+
+  // 方案3：纯传送
+  const teleportResult = findTeleportPath(start, end, toriiList, worldId);
+  const teleportMultiMode = teleportToMultiMode(teleportResult);
+
+  // 比较总步行距离（传送不计入距离）
+  const candidates: MultiModePathResult[] = [walkResult];
+
+  if (railResult.found) {
+    candidates.push(railResult);
+  }
+
+  if (teleportMultiMode.found && teleportMultiMode.teleportCount > 0) {
+    candidates.push(teleportMultiMode);
+  }
+
+  // TODO: 方案4：传送+铁路混合（先传送到铁路站附近）
+  // 这个比较复杂，暂时跳过
+
+  // 选择最优方案
+  // 优先级：传送次数少 > 换乘次数少 > 总步行距离短
+  let best = candidates[0];
+  for (const candidate of candidates) {
+    const bestScore = scoreResult(best);
+    const candidateScore = scoreResult(candidate);
+    if (candidateScore < bestScore) {
+      best = candidate;
+    }
+  }
+
+  return best;
+}
+
+// 速度常量 (m/s)
+const SPEEDS = {
+  WALK: 4.317,   // 普通步行速度
+  ELYTRA: 40,    // 鞘翅飞行速度
+  RAIL: 15,      // 矿车速度
+};
+
+// 时间惩罚常量 (秒)
+const TIME_PENALTIES = {
+  TRANSFER: 15,           // 每次换乘约 15 秒
+  TELEPORT: 3,            // 正向传送操作约 3 秒（鸟居→中转点）
+  TELEPORT_REVERSE: 30,   // 反向传送惩罚 30 秒（中转点→鸟居，需要找NPC/等待）
+};
+
+// 鞘翅消耗常量
+const ELYTRA_DURABILITY = {
+  MAX: 432,              // 鞘翅最大耐久
+  DRAIN_RATE: 1,         // 消耗速率：1点/秒
+  UNBREAKING_MULTI: 4,   // 耐久III平均延长4倍
+};
+
+// 烟花常量
+const FIREWORK_BOOST = {
+  DISTANCE_PER_ROCKET: 50,  // 每个烟花大约推进50米（估算值）
+};
+
+// 鞘翅消耗结果
+export interface ElytraConsumption {
+  flightTime: number;        // 飞行时间（秒）
+  durabilityUsed: number;    // 耐久消耗（无附魔）
+  durabilityUsedUnbreaking: number;  // 耐久消耗（耐久III）
+  fireworksUsed: number;     // 烟花使用数量
+  elytraCount: number;       // 需要的鞘翅数量（无附魔）
+  elytraCountUnbreaking: number;  // 需要的鞘翅数量（耐久III）
+}
+
+/**
+ * 计算鞘翅飞行消耗
+ */
+export function calculateElytraConsumption(walkDistance: number): ElytraConsumption {
+  const flightTime = walkDistance / SPEEDS.ELYTRA;
+  const durabilityUsed = Math.ceil(flightTime * ELYTRA_DURABILITY.DRAIN_RATE);
+  const durabilityUsedUnbreaking = Math.ceil(durabilityUsed / ELYTRA_DURABILITY.UNBREAKING_MULTI);
+  const fireworksUsed = Math.ceil(walkDistance / FIREWORK_BOOST.DISTANCE_PER_ROCKET);
+  const elytraCount = Math.ceil(durabilityUsed / ELYTRA_DURABILITY.MAX);
+  const elytraCountUnbreaking = Math.ceil(durabilityUsedUnbreaking / ELYTRA_DURABILITY.MAX);
+
+  return {
+    flightTime,
+    durabilityUsed,
+    durabilityUsedUnbreaking,
+    fireworksUsed,
+    elytraCount,
+    elytraCountUnbreaking,
+  };
+}
+
+/**
+ * 计算路径评分（基于预估时间，秒，越低越好）
+ */
+function scoreResult(result: MultiModePathResult, useElytra: boolean = true): number {
+  // 步行时间
+  const walkSpeed = useElytra ? SPEEDS.ELYTRA : SPEEDS.WALK;
+  const walkTime = result.totalWalkDistance / walkSpeed;
+
+  // 铁路时间
+  const railTime = result.totalRailDistance / SPEEDS.RAIL;
+
+  // 换乘时间惩罚
+  const transferTime = result.totalTransfers * TIME_PENALTIES.TRANSFER;
+
+  // 正向传送操作时间
+  const teleportTime = result.teleportCount * TIME_PENALTIES.TELEPORT;
+
+  // 反向传送惩罚时间
+  const reverseTeleportTime = result.reverseTeleportCount * TIME_PENALTIES.TELEPORT_REVERSE;
+
+  return walkTime + railTime + transferTime + teleportTime + reverseTeleportTime;
+}
+
+/**
+ * 计算路径预估时间（秒，用于 UI 显示）
+ */
+export function calculateEstimatedTime(result: MultiModePathResult, useElytra: boolean = true): number {
+  return scoreResult(result, useElytra);
+}
+
+/**
+ * 计算步行/飞行段时间
+ */
+export function calculateWalkTime(distance: number, useElytra: boolean = true): number {
+  const speed = useElytra ? SPEEDS.ELYTRA : SPEEDS.WALK;
+  return distance / speed;
+}
+
+/**
+ * 计算铁路段时间
+ */
+export function calculateRailTime(distance: number): number {
+  return distance / SPEEDS.RAIL;
+}
+
