@@ -91,9 +91,9 @@ export function DraggablePanel({
     onFocus?.();
   }, [onFocus]);
 
-  // 手机端：保持原有布局
+  // 手机端：不渲染（手机端内容在 MapContainer 的 sm:hidden 区域单独渲染）
   if (!isDesktop) {
-    return <>{children}</>;
+    return null;
   }
 
   // 桌面端：可拖拽浮动面板
