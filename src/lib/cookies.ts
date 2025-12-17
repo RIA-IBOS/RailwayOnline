@@ -2,12 +2,15 @@
  * Cookie 工具函数
  */
 
+export type MapStyle = 'default' | 'watercolor' | 'sketch';
+
 export interface MapSettings {
   currentWorld: string;
   showRailway: boolean;
   showLandmark: boolean;
   showPlayers: boolean;
   dimBackground: boolean;
+  mapStyle: MapStyle;
 }
 
 const COOKIE_NAME = 'map_settings';

@@ -6,7 +6,7 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { X, ArrowUpDown, Train, Home, Footprints, User, Sparkles, Zap, Clock, Rocket, Shield } from 'lucide-react';
+import { X, ArrowUpDown, Train, Home, Footprints, User, Zap, Clock, Rocket, Shield } from 'lucide-react';
 import type { ParsedStation, ParsedLine, Coordinate, Player, TravelMode } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 import {
@@ -55,7 +55,6 @@ const TRAVEL_MODES: Array<{
   label: string;
   icon: typeof Train;
 }> = [
-  { mode: 'auto', label: '自动', icon: Sparkles },
   { mode: 'rail', label: '铁路', icon: Train },
   { mode: 'teleport', label: '传送', icon: Zap },
   { mode: 'walk', label: '步行', icon: Footprints },
@@ -171,7 +170,7 @@ export function NavigationPanel({
 }: NavigationPanelProps) {
   const [startPoint, setStartPoint] = useState<SearchItem | null>(null);
   const [endPoint, setEndPoint] = useState<SearchItem | null>(null);
-  const [travelMode, setTravelMode] = useState<TravelMode>('auto');
+  const [travelMode, setTravelMode] = useState<TravelMode>('rail');
   const [preferLessTransfer, setPreferLessTransfer] = useState(true);
   const [useElytra, setUseElytra] = useState(true);  // 是否使用鞘翅飞行
   const [result, setResult] = useState<MultiModePathResult | null>(null);
@@ -355,7 +354,7 @@ export function NavigationPanel({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-80 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
+    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <h3 className="font-bold text-gray-800">路径规划</h3>
