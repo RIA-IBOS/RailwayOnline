@@ -235,7 +235,11 @@ export function NavigationPanel({
   // 搜索路径
   const handleSearch = () => {
     if (!startPoint || !endPoint) return;
-    if (startPoint.name === endPoint.name) {
+    // 比较坐标而非名字，避免同名但不同位置的情况（如玩家）
+    const isSameLocation =
+      startPoint.coord.x === endPoint.coord.x &&
+      startPoint.coord.z === endPoint.coord.z;
+    if (isSameLocation) {
       setResult({
         found: false,
         mode: 'walk',
@@ -685,7 +689,9 @@ export function NavigationPanel({
             </>
           ) : (
             <div className="text-center text-gray-500 py-4 text-sm">
-              {startPoint?.name === endPoint?.name ? '起点和终点相同' : '未找到可用路线'}
+              {startPoint?.coord.x === endPoint?.coord.x && startPoint?.coord.z === endPoint?.coord.z
+                ? '起点和终点相同'
+                : '未找到可用路线'}
             </div>
           )}
         </div>
