@@ -124,41 +124,43 @@ function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps)
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors group relative ${
+        className={`p-2 rounded-lg transition-colors group relative ${
           mapStyle !== 'default'
-            ? 'bg-amber-100 text-amber-700'
-            : 'hover:bg-gray-100 text-gray-600'
+            ? 'bg-amber-100 text-amber-600'
+            : 'hover:bg-gray-100 text-gray-400'
         }`}
         title="地图风格"
       >
         {currentStyle.icon}
-        <span className="text-sm hidden sm:inline">{currentStyle.label}</span>
-        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          {currentStyle.label}
+        </span>
       </button>
 
       {/* 下拉菜单 */}
-      {isOpen && (
-        <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-          {MAP_STYLE_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => {
-                onToggleMapStyle(option.value);
-                setIsOpen(false);
-              }}
-              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors ${
-                mapStyle === option.value ? 'bg-amber-50 text-amber-700' : 'text-gray-700'
-              }`}
-            >
-              {option.icon}
-              <div className="flex flex-col">
-                <span className={mapStyle === option.value ? 'font-medium' : ''}>{option.label}</span>
-                <span className="text-xs text-gray-400">{option.description}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        className={`absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 origin-top-right transition-all duration-150 ${
+          isOpen
+            ? 'opacity-100 scale-100'
+            : 'opacity-0 scale-95 pointer-events-none'
+        }`}
+      >
+        {MAP_STYLE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => {
+              onToggleMapStyle(option.value);
+              setIsOpen(false);
+            }}
+            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors ${
+              mapStyle === option.value ? 'bg-amber-50 text-amber-700' : 'text-gray-700'
+            }`}
+          >
+            {option.icon}
+            <span className={mapStyle === option.value ? 'font-medium' : ''}>{option.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
