@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil } from 'lucide-react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil, Settings } from 'lucide-react';
 import type { MapStyle } from '@/lib/cookies';
 
 interface ToolbarProps {
@@ -12,6 +12,7 @@ interface ToolbarProps {
   onLinesClick: () => void;
   onPlayersClick: () => void;
   onHelpClick: () => void;
+  onSettingsClick: () => void;
 }
 
 export function Toolbar({
@@ -19,6 +20,7 @@ export function Toolbar({
   onLinesClick,
   onPlayersClick,
   onHelpClick,
+  onSettingsClick,
 }: ToolbarProps) {
   return (
     <div className="bg-white/90 rounded-lg shadow-lg p-2 flex items-center gap-1">
@@ -69,6 +71,18 @@ export function Toolbar({
         <HelpCircle className="w-5 h-5" />
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           帮助
+        </span>
+      </button>
+
+      {/* 设置 */}
+      <button
+        onClick={onSettingsClick}
+        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors group relative"
+        title="设置"
+      >
+        <Settings className="w-5 h-5" />
+        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          设置
         </span>
       </button>
     </div>
