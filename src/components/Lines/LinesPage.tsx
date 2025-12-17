@@ -8,6 +8,17 @@ import { ChevronLeft, ChevronDown } from 'lucide-react';
 import type { ParsedLine, BureausConfig } from '@/types';
 import { fetchRailwayData, parseRailwayData, fetchBureausConfig, getBureauName } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
+import { RMPMapView } from './RMPMapView';
+
+// RMP 原始数据类型
+interface RMPData {
+  svgViewBoxZoom: number;
+  svgViewBoxMin: { x: number; y: number };
+  graph: {
+    nodes: any[];
+    edges: any[];
+  };
+}
 
 // RMP 数据文件映射
 const RMP_DATA_FILES: Record<string, string> = {
@@ -30,6 +41,7 @@ interface LinesPageProps {
 export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
   const [currentWorld, setCurrentWorld] = useState('zth');
   const [lines, setLines] = useState<ParsedLine[]>([]);
+  const [rmpRawData, setRmpRawData] = useState<RMPData | null>(null);
   const [bureausConfig, setBureausConfig] = useState<BureausConfig>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,10 +61,12 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
 
       // 加载 RMP 数据
       let rmpLines: ParsedLine[] = [];
+      let rawRmpData: RMPData | null = null;
       const rmpFile = RMP_DATA_FILES[currentWorld];
       if (rmpFile) {
         try {
           const rmpData = await fetchRMPData(rmpFile);
+          rawRmpData = rmpData as RMPData;
           const parsed = parseRMPData(rmpData, currentWorld);
           rmpLines = parsed.lines;
         } catch (e) {
@@ -60,6 +74,7 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
         }
       }
 
+      setRmpRawData(rawRmpData);
       setLines([...riaLines, ...rmpLines]);
       setLoading(false);
     }
@@ -164,15 +179,16 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
               </div>
             )}
 
-            {/* RMP 线路 */}
-            {groupedLines['RMP'] && (
+            {/* RMP 线路 - 使用 SVG 地图展示 */}
+            {rmpRawData && (
               <div>
-                <h2 className="text-lg font-bold mb-3 text-gray-800">RMP 线路</h2>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {Object.values(groupedLines['RMP']).flat().map(line => (
-                    <LineCard key={line.lineId} line={line} onSelect={onLineSelect} />
-                  ))}
-                </div>
+                <h2 className="text-lg font-bold mb-3 text-gray-800">RMP 线路图</h2>
+                <RMPMapView
+                  rmpData={rmpRawData}
+                  onStationClick={(station) => {
+                    console.log('Station clicked:', station);
+                  }}
+                />
               </div>
             )}
           </div>

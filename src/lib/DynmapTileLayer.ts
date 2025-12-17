@@ -20,6 +20,10 @@ export interface DynmapTileLayerOptions extends L.TileLayerOptions {
   nightAndDay?: boolean;
   // 当前是否为夜间模式
   isNight?: boolean;
+  // 瓦片加载失败时的最大重试次数
+  maxRetries?: number;
+  // 重试间隔（毫秒）
+  retryDelay?: number;
 }
 
 export interface DynmapLatLngTileResult {
@@ -52,6 +56,10 @@ export class DynmapTileLayer extends L.TileLayer {
   private _extraZoomLevels: number;
   private _nightAndDay: boolean;
   private _isNight: boolean;
+  private _maxRetries: number;
+  private _retryDelay: number;
+  // 记录每个瓦片的重试次数
+  private _tileRetries: Map<string, number> = new Map();
 
   constructor(options: DynmapTileLayerOptions) {
     // 使用占位符 URL，实际 URL 在 getTileUrl 中生成
@@ -73,6 +81,61 @@ export class DynmapTileLayer extends L.TileLayer {
     this._extraZoomLevels = options.extraZoomLevels || 0;
     this._nightAndDay = options.nightAndDay || false;
     this._isNight = options.isNight || true;
+    this._maxRetries = options.maxRetries ?? 3;
+    this._retryDelay = options.retryDelay ?? 1000;
+  }
+
+  /**
+   * 重写 createTile 方法，添加重试逻辑
+   */
+  createTile(coords: L.Coords, done: L.DoneCallback): HTMLImageElement {
+    const tile = document.createElement('img');
+    const tileKey = `${coords.x}:${coords.y}:${coords.z}`;
+
+    tile.alt = '';
+    tile.setAttribute('role', 'presentation');
+
+    // 设置 crossOrigin 以支持 CORS
+    if (this.options.crossOrigin || this.options.crossOrigin === '') {
+      tile.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
+    }
+
+    const loadTile = (retryCount: number) => {
+      const url = this.getTileUrl(coords);
+
+      tile.onload = () => {
+        // 加载成功，清除重试记录
+        this._tileRetries.delete(tileKey);
+        done(undefined, tile);
+      };
+
+      tile.onerror = () => {
+        if (retryCount < this._maxRetries) {
+          // 还有重试次数，延迟后重试
+          const nextRetry = retryCount + 1;
+          this._tileRetries.set(tileKey, nextRetry);
+
+          setTimeout(() => {
+            // 添加时间戳参数避免缓存
+            tile.src = `${url}${url.includes('?') ? '&' : '?'}_retry=${nextRetry}&_t=${Date.now()}`;
+          }, this._retryDelay * nextRetry); // 递增延迟
+        } else {
+          // 重试次数用尽，报告错误
+          this._tileRetries.delete(tileKey);
+          done(new Error(`Tile load failed after ${this._maxRetries} retries`), tile);
+        }
+      };
+
+      // 设置初始 URL
+      if (retryCount === 0) {
+        tile.src = url;
+      }
+    };
+
+    // 开始加载
+    loadTile(this._tileRetries.get(tileKey) || 0);
+
+    return tile;
   }
 
   /**
