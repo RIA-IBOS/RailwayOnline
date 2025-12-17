@@ -23,6 +23,7 @@ import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwa
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
 import { fetchPlayers } from '@/lib/playerApi';
+import { loadMapSettings, saveMapSettings } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 
@@ -45,11 +46,14 @@ function MapContainer() {
   const projectionRef = useRef<DynmapProjection | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [currentWorld, setCurrentWorld] = useState('zth');
-  const [showRailway, setShowRailway] = useState(true);
-  const [showLandmark, setShowLandmark] = useState(true);
-  const [showPlayers, setShowPlayers] = useState(true);
-  const [dimBackground, setDimBackground] = useState(false);
+
+  // 从 cookie 读取初始设置
+  const savedSettings = loadMapSettings();
+  const [currentWorld, setCurrentWorld] = useState(savedSettings?.currentWorld ?? 'zth');
+  const [showRailway, setShowRailway] = useState(savedSettings?.showRailway ?? true);
+  const [showLandmark, setShowLandmark] = useState(savedSettings?.showLandmark ?? true);
+  const [showPlayers, setShowPlayers] = useState(savedSettings?.showPlayers ?? true);
+  const [dimBackground, setDimBackground] = useState(savedSettings?.dimBackground ?? false);
   const [showNavigation, setShowNavigation] = useState(false);
   const [showLinesPage, setShowLinesPage] = useState(false);
   const [showPlayersPage, setShowPlayersPage] = useState(false);
@@ -87,6 +91,17 @@ function MapContainer() {
       }
     }
   }, [dimBackground]);
+
+  // 保存地图设置到 cookie
+  useEffect(() => {
+    saveMapSettings({
+      currentWorld,
+      showRailway,
+      showLandmark,
+      showPlayers,
+      dimBackground,
+    });
+  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground]);
 
   // 加载状态管理
   const { startLoading, updateStage, finishLoading, initialized } = useLoadingStore();
@@ -316,13 +331,16 @@ function MapContainer() {
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
 
+    // 从 cookie 读取初始世界设置
+    const savedWorld = loadMapSettings()?.currentWorld ?? 'zth';
+
     // 创建 Dynmap CRS
     const crs = createDynmapCRS(ZTH_FLAT_CONFIG);
     const projection = (crs as any).dynmapProjection as DynmapProjection;
     projectionRef.current = projection;
 
-    // 计算初始中心点 - 优先使用零洲配置，否则退回第一个世界，避免 HMR/数据异常导致崩溃
-    const world = WORLDS.find(w => w.id === 'zth') ?? WORLDS[0];
+    // 计算初始中心点 - 使用保存的世界，否则退回零洲
+    const world = WORLDS.find(w => w.id === savedWorld) ?? WORLDS.find(w => w.id === 'zth') ?? WORLDS[0];
     if (!world) return;
 
     const centerLatLng = projection.locationToLatLng(
@@ -345,8 +363,8 @@ function MapContainer() {
     // 添加缩放控件 - 桌面端右下角，手机端左下角（通过 CSS 媒体查询在 index.css 处理）
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-    // 添加 Dynmap 瓦片图层
-    const tileLayer = createDynmapTileLayer('zth', 'flat');
+    // 添加 Dynmap 瓦片图层 - 使用保存的世界
+    const tileLayer = createDynmapTileLayer(savedWorld, 'flat');
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
