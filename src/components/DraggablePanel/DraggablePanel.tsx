@@ -110,10 +110,13 @@ export function DraggablePanel({
       }}
       onMouseDown={handlePanelClick}
     >
-      {/* 拖拽手柄区域（覆盖在顶部） */}
+      {/* 拖拽手柄区域（覆盖在顶部左侧，留出右侧按钮区域） */}
       <div
-        className="absolute top-0 left-0 right-0 h-12 cursor-grab z-10"
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        className="absolute top-0 left-0 h-12 cursor-grab"
+        style={{
+          cursor: isDragging ? 'grabbing' : 'grab',
+          right: '80px', // 留出右侧按钮区域
+        }}
         onMouseDown={handleMouseDown}
       />
       {children}
