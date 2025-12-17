@@ -3,6 +3,8 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createDynmapCRS, ZTH_FLAT_CONFIG, DynmapProjection } from '@/lib/DynmapProjection';
 import { DynmapTileLayer, createDynmapTileLayer } from '@/lib/DynmapTileLayer';
+import { createSketchTileLayer } from '@/lib/SketchTileLayer';
+import { createWatercolorTileLayer } from '@/lib/SketchTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
 import { PlayerLayer } from './PlayerLayer';
@@ -18,12 +20,13 @@ import { Toolbar, LayerControl, AboutCard } from '../Toolbar/Toolbar';
 import { LinesPage } from '../Lines/LinesPage';
 import { PlayersList } from '../Players/PlayersList';
 import { LoadingOverlay } from '../Loading/LoadingOverlay';
+import { DraggablePanel } from '../DraggablePanel/DraggablePanel';
 import { useLoadingStore } from '@/store/loadingStore';
 import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
 import { fetchPlayers } from '@/lib/playerApi';
-import { loadMapSettings, saveMapSettings } from '@/lib/cookies';
+import { loadMapSettings, saveMapSettings, MapStyle } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 
@@ -55,6 +58,7 @@ function MapContainer() {
   const [showLandmark, setShowLandmark] = useState(savedSettings?.showLandmark ?? true);
   const [showPlayers, setShowPlayers] = useState(savedSettings?.showPlayers ?? true);
   const [dimBackground, setDimBackground] = useState(savedSettings?.dimBackground ?? false);
+  const [mapStyle, setMapStyle] = useState<MapStyle>(savedSettings?.mapStyle ?? 'default');
   const [showNavigation, setShowNavigation] = useState(false);
   const [showLinesPage, setShowLinesPage] = useState(false);
   const [showPlayersPage, setShowPlayersPage] = useState(false);
@@ -73,6 +77,26 @@ function MapContainer() {
     landmark?: ParsedLandmark;
   } | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+
+  // 面板 z-index 管理（用于置顶）
+  const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
+    navigation: 1001,
+    players: 1001,
+    about: 1001,
+    lineDetail: 1001,
+    pointDetail: 1001,
+    playerDetail: 1001,
+  });
+  const zIndexCounterRef = useRef(1001);
+
+  // 置顶面板
+  const bringToFront = useCallback((panelId: string) => {
+    zIndexCounterRef.current += 1;
+    setPanelZIndexes(prev => ({
+      ...prev,
+      [panelId]: zIndexCounterRef.current,
+    }));
+  }, []);
 
   // 关闭"铁路图层"时，同时隐藏线路高亮与详情卡片，避免看起来"图层控制不生效"
   useEffect(() => {
@@ -93,6 +117,29 @@ function MapContainer() {
     }
   }, [dimBackground]);
 
+  // 地图风格切换
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map || !mapReady) return;
+
+    // 移除旧瓦片图层
+    if (tileLayerRef.current) {
+      tileLayerRef.current.remove();
+    }
+
+    // 添加新瓦片图层
+    let newTileLayer: L.TileLayer;
+    if (mapStyle === 'sketch') {
+      newTileLayer = createSketchTileLayer(currentWorld, 'flat');
+    } else if (mapStyle === 'watercolor') {
+      newTileLayer = createWatercolorTileLayer(currentWorld, 'flat');
+    } else {
+      newTileLayer = createDynmapTileLayer(currentWorld, 'flat');
+    }
+    newTileLayer.addTo(map);
+    tileLayerRef.current = newTileLayer;
+  }, [mapStyle, mapReady, currentWorld]);
+
   // 保存地图设置到 cookie
   useEffect(() => {
     saveMapSettings({
@@ -101,8 +148,9 @@ function MapContainer() {
       showLandmark,
       showPlayers,
       dimBackground,
+      mapStyle,
     });
-  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground]);
+  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground, mapStyle]);
 
   // 加载状态管理
   const { startLoading, updateStage, finishLoading, initialized } = useLoadingStore();
@@ -312,8 +360,15 @@ function MapContainer() {
       tileLayerRef.current.remove();
     }
 
-    // 添加新瓦片图层
-    const newTileLayer = createDynmapTileLayer(worldId, 'flat');
+    // 添加新瓦片图层（根据当前风格选择）
+    let newTileLayer: L.TileLayer;
+    if (mapStyle === 'sketch') {
+      newTileLayer = createSketchTileLayer(worldId, 'flat');
+    } else if (mapStyle === 'watercolor') {
+      newTileLayer = createWatercolorTileLayer(worldId, 'flat');
+    } else {
+      newTileLayer = createDynmapTileLayer(worldId, 'flat');
+    }
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
 
@@ -327,7 +382,7 @@ function MapContainer() {
       );
       map.setView(centerLatLng, 2);
     }
-  }, []);
+  }, [mapStyle]);
 
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
@@ -365,8 +420,16 @@ function MapContainer() {
     const isDesktop = window.innerWidth >= 640;
     L.control.zoom({ position: isDesktop ? 'bottomright' : 'bottomleft' }).addTo(map);
 
-    // 添加 Dynmap 瓦片图层 - 使用保存的世界
-    const tileLayer = createDynmapTileLayer(savedWorld, 'flat');
+    // 添加 Dynmap 瓦片图层 - 使用保存的世界和风格
+    const savedMapStyle = loadMapSettings()?.mapStyle ?? 'default';
+    let tileLayer: L.TileLayer;
+    if (savedMapStyle === 'sketch') {
+      tileLayer = createSketchTileLayer(savedWorld, 'flat');
+    } else if (savedMapStyle === 'watercolor') {
+      tileLayer = createWatercolorTileLayer(savedWorld, 'flat');
+    } else {
+      tileLayer = createDynmapTileLayer(savedWorld, 'flat');
+    }
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -433,6 +496,7 @@ function MapContainer() {
           projection={projectionRef.current}
           worldId={currentWorld}
           visible={showRailway && !routePath}
+          mapStyle={mapStyle}
           onStationClick={handleStationClick}
         />
       )}
@@ -482,19 +546,142 @@ function MapContainer() {
 
         {/* 工具栏 */}
         <Toolbar
-          onNavigationClick={() => setShowNavigation(true)}
+          onNavigationClick={() => { setShowNavigation(true); bringToFront('navigation'); }}
           onLinesClick={() => setShowLinesPage(true)}
-          onPlayersClick={() => setShowPlayersPage(true)}
-          onHelpClick={() => setShowAbout(true)}
+          onPlayersClick={() => { setShowPlayersPage(true); bringToFront('players'); }}
+          onHelpClick={() => { setShowAbout(true); bringToFront('about'); }}
         />
 
-        {/* 关于卡片 */}
-        {showAbout && (
-          <AboutCard onClose={() => setShowAbout(false)} />
-        )}
+        {/* 手机端：保持原有的流式布局 */}
+        <div className="sm:hidden flex flex-col gap-2">
+          {/* 关于卡片 */}
+          {showAbout && (
+            <AboutCard onClose={() => setShowAbout(false)} />
+          )}
 
-        {/* 路径规划面板 - 展开时隐藏其他内容 */}
-        {showNavigation && (
+          {/* 路径规划面板 */}
+          {showNavigation && (
+            <NavigationPanel
+              stations={stations}
+              lines={lines}
+              landmarks={landmarks}
+              players={players}
+              worldId={currentWorld}
+              onRouteFound={handleRouteFound}
+              onClose={() => setShowNavigation(false)}
+              onPointClick={(coord) => {
+                const map = leafletMapRef.current;
+                const proj = projectionRef.current;
+                if (!map || !proj) return;
+                const latLng = proj.locationToLatLng(coord.x, coord.y || 64, coord.z);
+                map.setView(latLng, 5);
+              }}
+            />
+          )}
+
+          {/* 线路详情卡片 */}
+          {highlightedLine && (
+            <LineDetailCard
+              line={highlightedLine}
+              onClose={() => setHighlightedLine(null)}
+              onStationClick={(_name, coord) => {
+                const map = leafletMapRef.current;
+                const proj = projectionRef.current;
+                if (!map || !proj) return;
+                const latLng = proj.locationToLatLng(coord.x, coord.y || 64, coord.z);
+                map.setView(latLng, 5);
+              }}
+            />
+          )}
+
+          {/* 点位详情卡片 */}
+          {selectedPoint && (() => {
+            const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
+            return (
+              <PointDetailCard
+                selectedPoint={selectedPoint}
+                nearbyStations={nearbyStations}
+                nearbyLandmarks={nearbyLandmarks}
+                lines={lines}
+                onClose={() => setSelectedPoint(null)}
+                onStationClick={handleStationClick}
+                onLandmarkClick={handleLandmarkClick}
+                onLineClick={(line) => {
+                  setSelectedPoint(null);
+                  handleLineSelect(line);
+                }}
+              />
+            );
+          })()}
+
+          {/* 玩家详情卡片 */}
+          {selectedPlayer && (() => {
+            const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
+            const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
+            return (
+              <PlayerDetailCard
+                player={selectedPlayer}
+                nearbyStations={nearbyStations}
+                nearbyLandmarks={nearbyLandmarks}
+                onClose={() => setSelectedPlayer(null)}
+                onStationClick={handleStationClick}
+                onLandmarkClick={handleLandmarkClick}
+              />
+            );
+          })()}
+
+          {/* 玩家列表面板 */}
+          {showPlayersPage && (
+            <PlayersList
+              worldId={currentWorld}
+              onClose={() => setShowPlayersPage(false)}
+              onPlayerSelect={(player) => {
+                setShowPlayersPage(false);
+                handlePlayerClick(player);
+              }}
+              onNavigateToPlayer={() => {
+                setShowPlayersPage(false);
+                setShowNavigation(true);
+              }}
+            />
+          )}
+        </div>
+
+        {/* 清除路径按钮 */}
+        {routePath && routePath.length > 0 && (
+          <button
+            onClick={() => setRoutePath(null)}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>清除路径</span>
+          </button>
+        )}
+      </div>
+
+      {/* 桌面端：可拖拽浮动面板 */}
+      {/* 关于卡片 */}
+      {showAbout && (
+        <DraggablePanel
+          id="about"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.about}
+          onFocus={() => bringToFront('about')}
+        >
+          <AboutCard onClose={() => setShowAbout(false)} />
+        </DraggablePanel>
+      )}
+
+      {/* 路径规划面板 */}
+      {showNavigation && (
+        <DraggablePanel
+          id="navigation"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.navigation}
+          onFocus={() => bringToFront('navigation')}
+        >
           <NavigationPanel
             stations={stations}
             lines={lines}
@@ -511,12 +698,41 @@ function MapContainer() {
               map.setView(latLng, 5);
             }}
           />
-        )}
+        </DraggablePanel>
+      )}
 
-      {/* 线路详情卡片 - 路径规划打开时隐藏 */}
-      {highlightedLine && !showNavigation && !selectedPoint && !selectedPlayer && (
-        <LineDetailCard
-          line={highlightedLine}
+      {/* 玩家列表面板 */}
+      {showPlayersPage && (
+        <DraggablePanel
+          id="players"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.players}
+          onFocus={() => bringToFront('players')}
+        >
+          <PlayersList
+            worldId={currentWorld}
+            onClose={() => setShowPlayersPage(false)}
+            onPlayerSelect={(player) => {
+              handlePlayerClick(player);
+            }}
+            onNavigateToPlayer={() => {
+              setShowNavigation(true);
+              bringToFront('navigation');
+            }}
+          />
+        </DraggablePanel>
+      )}
+
+      {/* 线路详情卡片 */}
+      {highlightedLine && (
+        <DraggablePanel
+          id="lineDetail"
+          defaultPosition={{ x: 340, y: 16 }}
+          zIndex={panelZIndexes.lineDetail}
+          onFocus={() => bringToFront('lineDetail')}
+        >
+          <LineDetailCard
+            line={highlightedLine}
             onClose={() => setHighlightedLine(null)}
             onStationClick={(_name, coord) => {
               const map = leafletMapRef.current;
@@ -526,12 +742,19 @@ function MapContainer() {
               map.setView(latLng, 5);
             }}
           />
-        )}
+        </DraggablePanel>
+      )}
 
-        {/* 点位详情卡片 */}
-        {selectedPoint && !showNavigation && !selectedPlayer && (() => {
-          const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
-          return (
+      {/* 点位详情卡片 */}
+      {selectedPoint && (() => {
+        const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
+        return (
+          <DraggablePanel
+            id="pointDetail"
+            defaultPosition={{ x: 340, y: 16 }}
+            zIndex={panelZIndexes.pointDetail}
+            onFocus={() => bringToFront('pointDetail')}
+          >
             <PointDetailCard
               selectedPoint={selectedPoint}
               nearbyStations={nearbyStations}
@@ -545,14 +768,21 @@ function MapContainer() {
                 handleLineSelect(line);
               }}
             />
-          );
-        })()}
+          </DraggablePanel>
+        );
+      })()}
 
-        {/* 玩家详情卡片 */}
-        {selectedPlayer && !showNavigation && (() => {
-          const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
-          const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
-          return (
+      {/* 玩家详情卡片 */}
+      {selectedPlayer && (() => {
+        const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
+        const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
+        return (
+          <DraggablePanel
+            id="playerDetail"
+            defaultPosition={{ x: 340, y: 16 }}
+            zIndex={panelZIndexes.playerDetail}
+            onFocus={() => bringToFront('playerDetail')}
+          >
             <PlayerDetailCard
               player={selectedPlayer}
               nearbyStations={nearbyStations}
@@ -561,39 +791,9 @@ function MapContainer() {
               onStationClick={handleStationClick}
               onLandmarkClick={handleLandmarkClick}
             />
-          );
-        })()}
-
-        {/* 清除路径按钮 - 路径规划打开时隐藏 */}
-        {routePath && routePath.length > 0 && !showNavigation && (
-          <button
-            onClick={() => setRoutePath(null)}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <span>清除路径</span>
-          </button>
-        )}
-
-        {/* 玩家列表面板 - 在左侧面板内显示 */}
-        {showPlayersPage && (
-          <PlayersList
-            worldId={currentWorld}
-            onClose={() => setShowPlayersPage(false)}
-            onPlayerSelect={(player) => {
-              setShowPlayersPage(false);
-              handlePlayerClick(player);
-            }}
-            onNavigateToPlayer={() => {
-              setShowPlayersPage(false);
-              // 打开导航面板
-              setShowNavigation(true);
-            }}
-          />
-        )}
-      </div>
+          </DraggablePanel>
+        );
+      })()}
 
       {/* 右侧图层控制 - 手机端右下角版权上方，桌面端右上角 */}
       <div className="absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-4 z-[1000]">
@@ -602,10 +802,12 @@ function MapContainer() {
           showLandmark={showLandmark}
           showPlayers={showPlayers}
           dimBackground={dimBackground}
+          mapStyle={mapStyle}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
           onTogglePlayers={setShowPlayers}
           onToggleDimBackground={setDimBackground}
+          onToggleMapStyle={setMapStyle}
         />
       </div>
 

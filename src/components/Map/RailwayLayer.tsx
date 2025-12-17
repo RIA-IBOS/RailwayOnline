@@ -9,6 +9,7 @@ import type { ParsedLine, ParsedStation, BureausConfig, PathSegment } from '@/ty
 import { fetchRailwayData, parseRailwayData, getBureauName } from '@/lib/railwayParser';
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { DynmapProjection } from '@/lib/DynmapProjection';
+import type { MapStyle } from '@/lib/cookies';
 
 /**
  * 采样二次贝塞尔曲线为折线点
@@ -65,6 +66,7 @@ interface RailwayLayerProps {
   projection: DynmapProjection;
   worldId: string;
   visible?: boolean;
+  mapStyle?: MapStyle;
   onStationClick?: (station: ParsedStation) => void;
 }
 
@@ -73,6 +75,7 @@ export function RailwayLayer({
   projection,
   worldId,
   visible = true,
+  mapStyle = 'default',
   onStationClick,
 }: RailwayLayerProps) {
   const [lines, setLines] = useState<ParsedLine[]>([]);
@@ -135,6 +138,11 @@ export function RailwayLayer({
     group.clearLayers();
     if (lines.length === 0) return;
 
+    // 素描模式下的边框样式
+    const isSketchMode = mapStyle === 'sketch';
+    const strokeColor = '#1a1a1a';  // 深黑色边框
+    const strokeWeight = 6;  // 边框宽度（比线路粗）
+
     // 渲染每条线路
     for (const line of lines) {
       // 如果有 edgePaths，使用曲线渲染
@@ -144,6 +152,18 @@ export function RailwayLayer({
           for (const segment of edgePath.segments) {
             const latLngs = segmentToLatLngs(segment, projection);
             if (latLngs.length >= 2) {
+              // 素描模式：先绘制黑色边框
+              if (isSketchMode) {
+                const strokeLine = L.polyline(latLngs, {
+                  color: strokeColor,
+                  weight: strokeWeight,
+                  opacity: 0.9,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                });
+                group.addLayer(strokeLine);
+              }
+
               const polyline = L.polyline(latLngs, {
                 color: line.color,
                 weight: 3,
@@ -162,6 +182,18 @@ export function RailwayLayer({
         const latLngs = line.stations.map(station =>
           projection.locationToLatLng(station.coord.x, station.coord.y, station.coord.z)
         );
+
+        // 素描模式：先绘制黑色边框
+        if (isSketchMode) {
+          const strokeLine = L.polyline(latLngs, {
+            color: strokeColor,
+            weight: strokeWeight,
+            opacity: 0.9,
+            lineCap: 'round',
+            lineJoin: 'round',
+          });
+          group.addLayer(strokeLine);
+        }
 
         const polyline = L.polyline(latLngs, {
           color: line.color,
@@ -190,10 +222,14 @@ export function RailwayLayer({
         const fillColor = station.isTransfer ? '#ffffff' : line.color;
         const borderWidth = station.isTransfer ? 3 : 2;
 
+        // 素描模式：站点添加黑色外边框
+        const markerColor = isSketchMode ? strokeColor : line.color;
+        const markerBorderWidth = isSketchMode ? borderWidth + 1 : borderWidth;
+
         const marker = L.circleMarker(latLng, {
-          radius,
-          color: line.color,
-          weight: borderWidth,
+          radius: isSketchMode ? radius + 1 : radius,
+          color: markerColor,
+          weight: markerBorderWidth,
           fillColor,
           fillOpacity: 1,
         });
@@ -233,7 +269,7 @@ export function RailwayLayer({
         group.addLayer(marker);
       }
     }
-  }, [lines, projection, onStationClick]);
+  }, [lines, projection, onStationClick, mapStyle]);
 
   // 控制图层可见性
   useEffect(() => {
