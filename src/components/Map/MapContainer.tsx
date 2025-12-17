@@ -459,6 +459,7 @@ function MapContainer() {
           projection={projectionRef.current}
           worldId={currentWorld}
           visible={showRailway && !routePath}
+          mapStyle={mapStyle}
           onStationClick={handleStationClick}
         />
       )}
