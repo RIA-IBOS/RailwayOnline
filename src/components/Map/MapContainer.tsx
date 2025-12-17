@@ -360,8 +360,9 @@ function MapContainer() {
       attributionControl: true
     });
 
-    // 添加缩放控件 - 桌面端右下角，手机端左下角（通过 CSS 媒体查询在 index.css 处理）
-    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+    // 添加缩放控件 - 桌面端右下角，手机端左下角
+    const isDesktop = window.innerWidth >= 640;
+    L.control.zoom({ position: isDesktop ? 'bottomright' : 'bottomleft' }).addTo(map);
 
     // 添加 Dynmap 瓦片图层 - 使用保存的世界
     const tileLayer = createDynmapTileLayer(savedWorld, 'flat');
