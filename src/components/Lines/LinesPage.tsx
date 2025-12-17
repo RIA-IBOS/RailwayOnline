@@ -6,8 +6,8 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronDown } from 'lucide-react';
 import type { ParsedLine, BureausConfig } from '@/types';
-import { fetchRailwayData, parseRailwayData, fetchBureausConfig, getBureauName } from '@/lib/railwayParser';
-import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
+import { getBureauName } from '@/lib/railwayParser';
+import { useDataStore } from '@/store/dataStore';
 import { RMPMapView } from './RMPMapView';
 
 // RMP 原始数据类型
@@ -19,12 +19,6 @@ interface RMPData {
     edges: any[];
   };
 }
-
-// RMP 数据文件映射
-const RMP_DATA_FILES: Record<string, string> = {
-  zth: '/data/rmp_zth.json',
-  houtu: '/data/rmp_houtu.json',
-};
 
 // 世界配置
 const WORLDS = [
@@ -46,40 +40,27 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 加载线路数据
+  const { getWorldData, bureausConfig: cachedBureausConfig, isLoaded } = useDataStore();
+
+  // 从缓存加载线路数据
   useEffect(() => {
-    async function loadLines() {
+    if (!isLoaded) {
       setLoading(true);
-
-      // 加载铁路局配置
-      const config = await fetchBureausConfig();
-      setBureausConfig(config);
-
-      // 加载 RIA_Data
-      const railwayData = await fetchRailwayData(currentWorld);
-      const { lines: riaLines } = parseRailwayData(railwayData);
-
-      // 加载 RMP 数据
-      let rmpLines: ParsedLine[] = [];
-      let rawRmpData: RMPData | null = null;
-      const rmpFile = RMP_DATA_FILES[currentWorld];
-      if (rmpFile) {
-        try {
-          const rmpData = await fetchRMPData(rmpFile);
-          rawRmpData = rmpData as RMPData;
-          const parsed = parseRMPData(rmpData, currentWorld);
-          rmpLines = parsed.lines;
-        } catch (e) {
-          console.warn(`Failed to load RMP data:`, e);
-        }
-      }
-
-      setRmpRawData(rawRmpData);
-      setLines([...riaLines, ...rmpLines]);
-      setLoading(false);
+      return;
     }
-    loadLines();
-  }, [currentWorld]);
+
+    const worldData = getWorldData(currentWorld);
+    if (worldData) {
+      setLines(worldData.lines);
+      setRmpRawData(worldData.rmpRawData as RMPData | null);
+    } else {
+      setLines([]);
+      setRmpRawData(null);
+    }
+
+    setBureausConfig(cachedBureausConfig);
+    setLoading(false);
+  }, [currentWorld, isLoaded, getWorldData, cachedBureausConfig]);
 
   // 按来源分组
   const groupedLines = lines.reduce((acc, line) => {

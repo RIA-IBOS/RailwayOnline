@@ -21,10 +21,9 @@ import { LinesPage } from '../Lines/LinesPage';
 import { PlayersList } from '../Players/PlayersList';
 import { LoadingOverlay } from '../Loading/LoadingOverlay';
 import { DraggablePanel } from '../DraggablePanel/DraggablePanel';
+import { SettingsPanel } from '../Settings/SettingsPanel';
 import { useLoadingStore } from '@/store/loadingStore';
-import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwayParser';
-import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
-import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
+import { useDataStore } from '@/store/dataStore';
 import { fetchPlayers } from '@/lib/playerApi';
 import { loadMapSettings, saveMapSettings, MapStyle } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
@@ -37,12 +36,6 @@ const WORLDS = [
   { id: 'naraku', name: '奈落洲', center: { x: 0, y: 64, z: 0 } },
   { id: 'houtu', name: '后土洲', center: { x: 0, y: 64, z: 0 } }
 ];
-
-// RMP 数据文件映射
-const RMP_DATA_FILES: Record<string, string> = {
-  zth: '/data/rmp_zth.json',
-  houtu: '/data/rmp_houtu.json',
-};
 
 function MapContainer() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -63,6 +56,7 @@ function MapContainer() {
   const [showLinesPage, setShowLinesPage] = useState(false);
   const [showPlayersPage, setShowPlayersPage] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [stations, setStations] = useState<ParsedStation[]>([]);
   const [lines, setLines] = useState<ParsedLine[]>([]);
   const [landmarks, setLandmarks] = useState<ParsedLandmark[]>([]);
@@ -83,6 +77,7 @@ function MapContainer() {
     navigation: 1001,
     players: 1001,
     about: 1001,
+    settings: 1001,
     lineDetail: 1001,
     pointDetail: 1001,
     playerDetail: 1001,
@@ -153,83 +148,54 @@ function MapContainer() {
   }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground, mapStyle]);
 
   // 加载状态管理
-  const { startLoading, updateStage, finishLoading, initialized } = useLoadingStore();
+  const { startLoading, updateStage, finishLoading } = useLoadingStore();
+  const { loadAllData, getWorldData, isLoaded: dataLoaded } = useDataStore();
 
-  // 加载搜索数据
+  // 首次加载：预加载所有世界数据
   useEffect(() => {
-    async function loadSearchData() {
-      // 首次加载时显示进度
-      const isFirstLoad = !initialized;
-      if (isFirstLoad) {
-        startLoading([
-          { name: 'railway', label: '铁路数据' },
-          { name: 'rmp', label: 'RMP 线路数据' },
-          { name: 'landmark', label: '地标数据' },
-        ]);
-      }
+    if (dataLoaded) return;
 
-      // 加载 RIA_Data 站点数据
-      if (isFirstLoad) updateStage('railway', 'loading');
-      const railwayData = await fetchRailwayData(currentWorld);
-      const { lines: riaLines } = parseRailwayData(railwayData);
-      if (isFirstLoad) updateStage('railway', 'success');
+    startLoading([
+      { name: 'bureaus', label: '铁路局配置' },
+      { name: 'zth-railway', label: '零洲铁路数据' },
+      { name: 'zth-rmp', label: '零洲 RMP 数据' },
+      { name: 'zth-landmark', label: '零洲地标数据' },
+      { name: 'houtu-railway', label: '后土洲铁路数据' },
+      { name: 'houtu-rmp', label: '后土洲 RMP 数据' },
+      { name: 'houtu-landmark', label: '后土洲地标数据' },
+      { name: 'naraku-railway', label: '奈落洲铁路数据' },
+      { name: 'naraku-landmark', label: '奈落洲地标数据' },
+      { name: 'eden-railway', label: '伊甸铁路数据' },
+      { name: 'eden-landmark', label: '伊甸地标数据' },
+    ]);
 
-      // 加载 RMP 数据（如果有）
-      let rmpLines: ParsedLine[] = [];
-      let rmpStations: ParsedStation[] = [];
-      const rmpFile = RMP_DATA_FILES[currentWorld];
-      if (rmpFile) {
-        if (isFirstLoad) updateStage('rmp', 'loading');
-        try {
-          const rmpData = await fetchRMPData(rmpFile);
-          const parsed = parseRMPData(rmpData, currentWorld);
-          rmpLines = parsed.lines;
-          rmpStations = parsed.stations;
-          if (isFirstLoad) updateStage('rmp', 'success');
-        } catch (e) {
-          console.warn(`Failed to load RMP data for ${currentWorld}:`, e);
-          if (isFirstLoad) updateStage('rmp', 'error', '加载失败');
-        }
-      } else {
-        if (isFirstLoad) updateStage('rmp', 'success');
-      }
+    loadAllData((stage, status) => {
+      updateStage(stage, status);
+    }).then(() => {
+      setTimeout(() => {
+        finishLoading();
+      }, 500);
+    });
+  }, [dataLoaded, loadAllData, startLoading, updateStage, finishLoading]);
 
-      // 合并线路和站点
-      const allLines = [...riaLines, ...rmpLines];
-      const riaStations = getAllStations(riaLines);
+  // 切换世界时从缓存加载数据
+  useEffect(() => {
+    if (!dataLoaded) return;
 
-      // 合并站点：RIA站点优先，RMP站点只添加不重复的
-      const riaStationNames = new Set(riaStations.map(s => s.name));
-      const uniqueRmpStations = rmpStations.filter(s => !riaStationNames.has(s.name));
-      const allStations = [...riaStations, ...uniqueRmpStations];
-
-      setLines(allLines);
-      setStations(allStations);
-
-      // 加载地标数据
-      if (isFirstLoad) updateStage('landmark', 'loading');
-      const landmarkData = await fetchLandmarkData(currentWorld);
-      setLandmarks(parseLandmarkData(landmarkData));
-      if (isFirstLoad) updateStage('landmark', 'success');
-
-      // 加载玩家数据
-      const playersData = await fetchPlayers(currentWorld);
-      setPlayers(playersData);
-
-      // 清除之前的路径
-      setRoutePath(null);
-      setHighlightedLine(null);
-
-      // 完成加载
-      if (isFirstLoad) {
-        // 延迟一点关闭，让用户看到完成状态
-        setTimeout(() => {
-          finishLoading();
-        }, 500);
-      }
+    const worldData = getWorldData(currentWorld);
+    if (worldData) {
+      setLines(worldData.lines);
+      setStations(worldData.stations);
+      setLandmarks(worldData.landmarks);
     }
-    loadSearchData();
-  }, [currentWorld, initialized, startLoading, updateStage, finishLoading]);
+
+    // 加载玩家数据（实时数据，不缓存）
+    fetchPlayers(currentWorld).then(setPlayers);
+
+    // 清除之前的路径
+    setRoutePath(null);
+    setHighlightedLine(null);
+  }, [currentWorld, dataLoaded, getWorldData]);
 
   // 搜索结果选中处理
   const handleSearchSelect = useCallback((result: { coord: { x: number; y: number; z: number } }) => {
@@ -550,6 +516,7 @@ function MapContainer() {
           onLinesClick={() => setShowLinesPage(true)}
           onPlayersClick={() => { setShowPlayersPage(true); bringToFront('players'); }}
           onHelpClick={() => { setShowAbout(true); bringToFront('about'); }}
+          onSettingsClick={() => { setShowSettings(true); bringToFront('settings'); }}
         />
 
         {/* 手机端：保持原有的流式布局 */}
@@ -557,6 +524,11 @@ function MapContainer() {
           {/* 关于卡片 */}
           {showAbout && (
             <AboutCard onClose={() => setShowAbout(false)} />
+          )}
+
+          {/* 设置面板 */}
+          {showSettings && (
+            <SettingsPanel onClose={() => setShowSettings(false)} />
           )}
 
           {/* 路径规划面板 */}
@@ -671,6 +643,18 @@ function MapContainer() {
           onFocus={() => bringToFront('about')}
         >
           <AboutCard onClose={() => setShowAbout(false)} />
+        </DraggablePanel>
+      )}
+
+      {/* 设置面板 */}
+      {showSettings && (
+        <DraggablePanel
+          id="settings"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.settings}
+          onFocus={() => bringToFront('settings')}
+        >
+          <SettingsPanel onClose={() => setShowSettings(false)} />
         </DraggablePanel>
       )}
 
