@@ -1,10 +1,137 @@
 /**
  * 手绘素描风格瓦片图层
  * 基于 DynmapTileLayer，使用 Canvas 实时应用 Sobel 边缘检测滤镜
+ * 增强版：地形智能着色 + 纸张纹理叠加
  */
 
 import * as L from 'leaflet';
 import { DynmapTileLayerOptions } from './DynmapTileLayer';
+
+// ============ 颜色工具函数 ============
+
+/**
+ * RGB 转 HSL
+ */
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+
+  if (max === min) {
+    return { h: 0, s: 0, l };
+  }
+
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+  let h = 0;
+  switch (max) {
+    case r:
+      h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      break;
+    case g:
+      h = ((b - r) / d + 2) / 6;
+      break;
+    case b:
+      h = ((r - g) / d + 4) / 6;
+      break;
+  }
+
+  return { h: h * 360, s, l };
+}
+
+// ============ 地形分类 ============
+
+type TerrainType = 'water' | 'forest' | 'sand' | 'building' | 'road' | 'default';
+
+/**
+ * 根据颜色分类地形类型
+ */
+function classifyTerrain(r: number, g: number, b: number): TerrainType {
+  const { h, s, l } = rgbToHsl(r, g, b);
+
+  // 水域：蓝色调，中等饱和度
+  if (h >= 180 && h <= 260 && s > 0.25 && l > 0.2 && l < 0.7) {
+    return 'water';
+  }
+
+  // 森林/植被：绿色调
+  if (h >= 60 && h <= 170 && s > 0.15 && l > 0.15 && l < 0.6) {
+    return 'forest';
+  }
+
+  // 沙地/泥土：黄色/橙色调
+  if (h >= 20 && h <= 50 && s > 0.2 && l > 0.3 && l < 0.7) {
+    return 'sand';
+  }
+
+  // 道路/石头：灰色调（低饱和度，中等亮度）
+  if (s < 0.12 && l > 0.35 && l < 0.65) {
+    return 'road';
+  }
+
+  // 建筑物：较亮的灰色
+  if (s < 0.15 && l > 0.5 && l < 0.85) {
+    return 'building';
+  }
+
+  return 'default';
+}
+
+// 地形对应的淡彩色调（手绘地图风格）
+const TERRAIN_COLORS: Record<TerrainType, { r: number; g: number; b: number }> = {
+  water: { r: 180, g: 210, b: 230 },    // 淡蓝色
+  forest: { r: 195, g: 220, b: 185 },   // 淡绿色
+  sand: { r: 235, g: 220, b: 190 },     // 淡黄/米色
+  road: { r: 225, g: 220, b: 215 },     // 浅灰色
+  building: { r: 235, g: 230, b: 225 }, // 淡灰白
+  default: { r: 248, g: 244, b: 236 },  // 羊皮纸白
+};
+
+// ============ 纸张纹理 ============
+
+// 简单的伪随机数生成器（用于确定性噪声）
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+/**
+ * 添加纸张纹理效果
+ */
+function addPaperTexture(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  tileX: number,
+  tileY: number
+): void {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+
+      // 使用瓦片坐标作为种子，确保相邻瓦片纹理连续
+      const globalX = tileX * width + x;
+      const globalY = tileY * height + y;
+
+      // 多层噪声叠加，模拟纸张纤维
+      const noise1 = seededRandom(globalX * 0.1 + globalY * 0.1) * 8;
+      const noise2 = seededRandom(globalX * 0.05 + globalY * 0.07 + 100) * 4;
+      const noise3 = seededRandom(globalX * 0.02 + globalY * 0.03 + 200) * 2;
+
+      const textureValue = noise1 + noise2 + noise3 - 7; // 中心化
+
+      // 应用纹理（轻微变暗）
+      data[i] = Math.max(0, Math.min(255, data[i] + textureValue));
+      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + textureValue));
+      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + textureValue - 2)); // 蓝色稍微减少，偏暖
+    }
+  }
+}
 
 /**
  * 手绘风格瓦片图层类
@@ -103,7 +230,7 @@ export class SketchTileLayer extends L.TileLayer {
         return;
       }
       ctx.drawImage(img, 0, 0, 128, 128);
-      this.applySketchFilter(canvas, ctx);
+      this.applySketchFilter(canvas, ctx, coords.x, coords.y);
       done(undefined, canvas);
     };
 
@@ -117,19 +244,35 @@ export class SketchTileLayer extends L.TileLayer {
   }
 
   /**
-   * 应用手绘素描滤镜
-   * 使用 Sobel 边缘检测算法提取轮廓
+   * 应用手绘素描滤镜（增强版）
+   * 包含：Sobel 边缘检测 + 地形智能着色 + 纸张纹理
    */
-  private applySketchFilter(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): void {
+  private applySketchFilter(
+    canvas: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    tileX: number,
+    tileY: number
+  ): void {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const { width, height, data } = imageData;
     const pixelCount = width * height;
 
-    // 1. 转换为灰度图
+    // 1. 保存原始颜色用于地形分类
+    const originalColors = new Uint8Array(pixelCount * 3);
     const gray = new Float32Array(pixelCount);
+
     for (let i = 0; i < pixelCount; i++) {
       const pixelIdx = i * 4;
-      gray[i] = 0.299 * data[pixelIdx] + 0.587 * data[pixelIdx + 1] + 0.114 * data[pixelIdx + 2];
+      const r = data[pixelIdx];
+      const g = data[pixelIdx + 1];
+      const b = data[pixelIdx + 2];
+
+      originalColors[i * 3] = r;
+      originalColors[i * 3 + 1] = g;
+      originalColors[i * 3 + 2] = b;
+
+      // 同时计算灰度
+      gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
     }
 
     // 2. Sobel 边缘检测
@@ -140,13 +283,11 @@ export class SketchTileLayer extends L.TileLayer {
       for (let x = 1; x < width - 1; x++) {
         const idx = y * width + x;
 
-        // Sobel X 卷积核
         const gx =
           -gray[idx - width - 1] + gray[idx - width + 1] +
           -2 * gray[idx - 1] + 2 * gray[idx + 1] +
           -gray[idx + width - 1] + gray[idx + width + 1];
 
-        // Sobel Y 卷积核
         const gy =
           -gray[idx - width - 1] - 2 * gray[idx - width] - gray[idx - width + 1] +
           gray[idx + width - 1] + 2 * gray[idx + width] + gray[idx + width + 1];
@@ -161,18 +302,36 @@ export class SketchTileLayer extends L.TileLayer {
 
     if (maxEdge === 0) maxEdge = 1;
 
-    // 3. 归一化并生成素描效果（白底黑线）
+    // 3. 地形智能着色 + 边缘线条
     for (let i = 0; i < pixelCount; i++) {
       const pixelIdx = i * 4;
-      const edgeIntensity = Math.min(1, (edges[i] / maxEdge) * 2.5);
-      const intensity = Math.round(255 * (1 - edgeIntensity));
 
-      // 添加轻微的暖色调，模拟纸张效果
-      data[pixelIdx] = Math.min(255, intensity + 8);       // R
-      data[pixelIdx + 1] = Math.min(255, intensity + 4);   // G
-      data[pixelIdx + 2] = intensity;                       // B
-      data[pixelIdx + 3] = 255;                             // A
+      // 获取原始颜色
+      const r = originalColors[i * 3];
+      const g = originalColors[i * 3 + 1];
+      const b = originalColors[i * 3 + 2];
+
+      // 分类地形
+      const terrain = classifyTerrain(r, g, b);
+      const baseColor = TERRAIN_COLORS[terrain];
+
+      // 边缘强度（增强对比度）
+      const edgeIntensity = Math.min(1, (edges[i] / maxEdge) * 3);
+
+      // 线条颜色（深褐色，更有手绘感）
+      const lineR = 45;
+      const lineG = 35;
+      const lineB = 25;
+
+      // 混合：背景淡彩 + 边缘线条
+      data[pixelIdx] = Math.round(baseColor.r * (1 - edgeIntensity) + lineR * edgeIntensity);
+      data[pixelIdx + 1] = Math.round(baseColor.g * (1 - edgeIntensity) + lineG * edgeIntensity);
+      data[pixelIdx + 2] = Math.round(baseColor.b * (1 - edgeIntensity) + lineB * edgeIntensity);
+      data[pixelIdx + 3] = 255;
     }
+
+    // 4. 叠加纸张纹理
+    addPaperTexture(data, width, height, tileX, tileY);
 
     ctx.putImageData(imageData, 0, 0);
   }
