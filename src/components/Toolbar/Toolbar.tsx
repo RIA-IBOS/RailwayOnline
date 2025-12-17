@@ -132,14 +132,14 @@ function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps)
         title="地图风格"
       >
         {currentStyle.icon}
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none max-md:hidden">
           {currentStyle.label}
         </span>
       </button>
 
-      {/* 下拉菜单 */}
+      {/* 下拉菜单 - 桌面端向下弹出，移动端向上弹出 */}
       <div
-        className={`absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 origin-top-right transition-all duration-150 ${
+        className={`absolute right-0 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 transition-all duration-150 md:mt-1 md:origin-top-right max-md:bottom-full max-md:mb-1 max-md:origin-bottom-right ${
           isOpen
             ? 'opacity-100 scale-100'
             : 'opacity-0 scale-95 pointer-events-none'
