@@ -4,7 +4,13 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, Trash2, Database, Smartphone, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { X, RefreshCw, Trash2, Database, Smartphone, CheckCircle, AlertCircle, Loader2, Download } from 'lucide-react';
+
+// PWA 安装事件类型
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 import { useDataStore } from '@/store/dataStore';
 import { useLoadingStore } from '@/store/loadingStore';
 
@@ -25,6 +31,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     canInstall: false,
     swActive: false,
   });
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   // 检查 PWA 状态
   useEffect(() => {
@@ -49,8 +57,34 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       isInstalled,
     }));
 
+    // 监听 beforeinstallprompt 事件
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setPwaStatus(prev => ({
+        ...prev,
+        canInstall: true,
+      }));
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // 监听安装完成
+    window.addEventListener('appinstalled', () => {
+      setPwaStatus(prev => ({
+        ...prev,
+        isInstalled: true,
+        canInstall: false,
+      }));
+      setDeferredPrompt(null);
+    });
+
     // 更新缓存信息
     updateCacheInfo();
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, [updateCacheInfo]);
 
   // 格式化文件大小
@@ -118,6 +152,27 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     if (confirm('确定要清除所有缓存数据吗？下次打开时需要重新加载。')) {
       clearCache();
       updateCacheInfo();
+    }
+  };
+
+  // 安装 PWA
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) return;
+
+    setIsInstalling(true);
+    try {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setPwaStatus(prev => ({
+          ...prev,
+          isInstalled: true,
+          canInstall: false,
+        }));
+      }
+    } finally {
+      setIsInstalling(false);
+      setDeferredPrompt(null);
     }
   };
 
@@ -239,6 +294,22 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               </span>
             </div>
           </div>
+
+          {/* 安装按钮 - 仅在可安装且未安装时显示 */}
+          {pwaStatus.canInstall && !pwaStatus.isInstalled && (
+            <button
+              onClick={handleInstallPWA}
+              disabled={isInstalling}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white text-sm rounded-lg transition-colors"
+            >
+              {isInstalling ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>安装到桌面</span>
+            </button>
+          )}
         </div>
 
         {/* 关于 */}
