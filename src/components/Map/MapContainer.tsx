@@ -3,6 +3,7 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createDynmapCRS, ZTH_FLAT_CONFIG, DynmapProjection } from '@/lib/DynmapProjection';
 import { DynmapTileLayer, createDynmapTileLayer } from '@/lib/DynmapTileLayer';
+import { createSketchTileLayer } from '@/lib/SketchTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
 import { PlayerLayer } from './PlayerLayer';
@@ -23,7 +24,7 @@ import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwa
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
 import { fetchPlayers } from '@/lib/playerApi';
-import { loadMapSettings, saveMapSettings } from '@/lib/cookies';
+import { loadMapSettings, saveMapSettings, MapStyle } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 
@@ -55,6 +56,7 @@ function MapContainer() {
   const [showLandmark, setShowLandmark] = useState(savedSettings?.showLandmark ?? true);
   const [showPlayers, setShowPlayers] = useState(savedSettings?.showPlayers ?? true);
   const [dimBackground, setDimBackground] = useState(savedSettings?.dimBackground ?? false);
+  const [mapStyle, setMapStyle] = useState<MapStyle>(savedSettings?.mapStyle ?? 'default');
   const [showNavigation, setShowNavigation] = useState(false);
   const [showLinesPage, setShowLinesPage] = useState(false);
   const [showPlayersPage, setShowPlayersPage] = useState(false);
@@ -93,6 +95,24 @@ function MapContainer() {
     }
   }, [dimBackground]);
 
+  // 地图风格切换
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map || !mapReady) return;
+
+    // 移除旧瓦片图层
+    if (tileLayerRef.current) {
+      tileLayerRef.current.remove();
+    }
+
+    // 添加新瓦片图层
+    const newTileLayer = mapStyle === 'sketch'
+      ? createSketchTileLayer(currentWorld, 'flat')
+      : createDynmapTileLayer(currentWorld, 'flat');
+    newTileLayer.addTo(map);
+    tileLayerRef.current = newTileLayer;
+  }, [mapStyle, mapReady, currentWorld]);
+
   // 保存地图设置到 cookie
   useEffect(() => {
     saveMapSettings({
@@ -101,8 +121,9 @@ function MapContainer() {
       showLandmark,
       showPlayers,
       dimBackground,
+      mapStyle,
     });
-  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground]);
+  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground, mapStyle]);
 
   // 加载状态管理
   const { startLoading, updateStage, finishLoading, initialized } = useLoadingStore();
@@ -312,8 +333,10 @@ function MapContainer() {
       tileLayerRef.current.remove();
     }
 
-    // 添加新瓦片图层
-    const newTileLayer = createDynmapTileLayer(worldId, 'flat');
+    // 添加新瓦片图层（根据当前风格选择）
+    const newTileLayer = mapStyle === 'sketch'
+      ? createSketchTileLayer(worldId, 'flat')
+      : createDynmapTileLayer(worldId, 'flat');
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
 
@@ -327,7 +350,7 @@ function MapContainer() {
       );
       map.setView(centerLatLng, 2);
     }
-  }, []);
+  }, [mapStyle]);
 
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
@@ -365,8 +388,11 @@ function MapContainer() {
     const isDesktop = window.innerWidth >= 640;
     L.control.zoom({ position: isDesktop ? 'bottomright' : 'bottomleft' }).addTo(map);
 
-    // 添加 Dynmap 瓦片图层 - 使用保存的世界
-    const tileLayer = createDynmapTileLayer(savedWorld, 'flat');
+    // 添加 Dynmap 瓦片图层 - 使用保存的世界和风格
+    const savedMapStyle = loadMapSettings()?.mapStyle ?? 'default';
+    const tileLayer = savedMapStyle === 'sketch'
+      ? createSketchTileLayer(savedWorld, 'flat')
+      : createDynmapTileLayer(savedWorld, 'flat');
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -602,10 +628,12 @@ function MapContainer() {
           showLandmark={showLandmark}
           showPlayers={showPlayers}
           dimBackground={dimBackground}
+          mapStyle={mapStyle}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
           onTogglePlayers={setShowPlayers}
           onToggleDimBackground={setDimBackground}
+          onToggleMapStyle={setMapStyle}
         />
       </div>
 

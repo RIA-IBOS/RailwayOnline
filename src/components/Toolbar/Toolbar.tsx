@@ -3,7 +3,8 @@
  * 包含路径规划等快捷功能图标
  */
 
-import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users } from 'lucide-react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Pencil } from 'lucide-react';
+import type { MapStyle } from '@/lib/cookies';
 
 interface ToolbarProps {
   onNavigationClick: () => void;
@@ -131,10 +132,12 @@ interface LayerControlProps {
   showLandmark: boolean;
   showPlayers: boolean;
   dimBackground: boolean;
+  mapStyle: MapStyle;
   onToggleRailway: (show: boolean) => void;
   onToggleLandmark: (show: boolean) => void;
   onTogglePlayers: (show: boolean) => void;
   onToggleDimBackground: (dim: boolean) => void;
+  onToggleMapStyle: (style: MapStyle) => void;
 }
 
 export function LayerControl({
@@ -142,10 +145,12 @@ export function LayerControl({
   showLandmark,
   showPlayers,
   dimBackground,
+  mapStyle,
   onToggleRailway,
   onToggleLandmark,
   onTogglePlayers,
   onToggleDimBackground,
+  onToggleMapStyle,
 }: LayerControlProps) {
   return (
     <div className="bg-white/90 rounded-lg shadow-lg p-2 flex items-center gap-1">
@@ -212,6 +217,22 @@ export function LayerControl({
         <Moon className="w-5 h-5" />
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           淡化背景
+        </span>
+      </button>
+
+      {/* 素描风格 */}
+      <button
+        onClick={() => onToggleMapStyle(mapStyle === 'default' ? 'sketch' : 'default')}
+        className={`p-2 rounded-lg transition-colors group relative ${
+          mapStyle === 'sketch'
+            ? 'bg-amber-100 text-amber-600'
+            : 'hover:bg-gray-100 text-gray-400'
+        }`}
+        title="素描风格"
+      >
+        <Pencil className="w-5 h-5" />
+        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          素描风格
         </span>
       </button>
     </div>
