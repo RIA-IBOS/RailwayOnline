@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, ChevronDown, Map, Palette, Pencil } from 'lucide-react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil } from 'lucide-react';
 import type { MapStyle } from '@/lib/cookies';
 
 interface ToolbarProps {
