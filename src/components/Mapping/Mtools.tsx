@@ -691,7 +691,7 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
       {/* 右上角：图标按钮（风格参考 Toolbar.tsx）
           注意：为了“紧挨右上角 bar 左侧”，这里用了一个经验 right 偏移值。
           如果仍与右上角 LayerControl 重叠，把 sm:right-[260px] 这个数调大/调小即可。 */}
-      <div className="absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-[260px] z-[1001]">
+      <div className="hidden sm:block absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-[260px] z-[1001]">
         <button
           onClick={handleMainToggle}
           className={`relative group flex flex-col items-center p-2 rounded-lg transition-colors ${
@@ -880,7 +880,7 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
          ========================= */}
       {active && (
         <>
-          <div className="sm:hidden fixed left-2 right-2 bottom-40 z-[2200]">
+          <div className="hidden fixed left-2 right-2 bottom-40 z-[2200]">
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-bold text-gray-800">测量工具</h3>
@@ -998,7 +998,7 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
             </div>
           </div>
 
-          <div className="sm:hidden fixed left-2 right-2 bottom-8 z-[2200]">
+          <div className="hidden fixed left-2 right-2 bottom-8 z-[2200]">
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-bold text-gray-800">测量结果</h3>

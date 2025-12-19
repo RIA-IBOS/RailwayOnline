@@ -949,9 +949,34 @@ const renderDynamicExtraInfo = () => {
   );
 };
 
+useEffect(() => {
+  const mq = window.matchMedia('(max-width: 639px)'); // < sm
+  const sync = () => {
+    if (!mq.matches) return;
+
+    // 进入移动端：强制关闭并停止所有绘制/编辑
+    setMeasuringActive(false);
+    setImportPanelOpen(false);
+
+    setDrawing(false);
+    setDrawMode('none');
+    setTempPoints([]);
+    setRedoStack([]);
+    setEditingLayerId(null);
+
+    draftGeomRef.current?.clearLayers();
+  };
+
+  sync();
+  mq.addEventListener('change', sync);
+  return () => mq.removeEventListener('change', sync);
+}, []);
+
+
 
   return (
     <>
+    <div className="hidden sm:block">
       {/* 右侧工具按钮：测绘（图标 + 下拉） */}
       <div className="absolute bottom-8 right-14 sm:top-4 sm:bottom-auto sm:right-[316px] z-[1001]">
         <div className="relative">
@@ -1354,6 +1379,7 @@ const renderDynamicExtraInfo = () => {
           ))}
         </div>
       )}
+      </div>
     </>
   );
 }
