@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState} from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
 import {
   FORMAT_REGISTRY,
   getSubTypeOptions,
@@ -11,8 +12,10 @@ import {
   type DrawMode,
 } from '@/components/Mapping/featureFormats';
 
-// 你项目里实际用到的类型（保持与 MapContainer 一致）
 import type { DynmapProjection } from '@/lib/DynmapProjection';
+import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
+import { Pencil, Upload, Trash2, X } from 'lucide-react';
+
 
 /**
  * 关键：把 MapContainer 里的引用对象（ref）当 props 传进来
@@ -125,6 +128,50 @@ useEffect(() => {
   setEditingLayerId(null);
 }, [closeSignal]);
 
+
+// 下拉菜单开关（仅再次点击“测绘”主按钮才收回）
+const [measureDropdownOpen, setMeasureDropdownOpen] = useState(false);
+
+const toggleMeasureDropdown = () => {
+  setMeasureDropdownOpen((v) => !v);
+};
+
+const toggleMeasuringActiveFromMenu = () => {
+  if (!measuringActive) {
+    // 打开测绘时：通知外部关闭“测量工具”（视同结束对方）
+    onBecameActive?.();
+
+    // 切换主功能自动清空（不提示）
+    clearAllLayers();
+
+    setMeasuringActive(true);
+    return;
+  }
+
+  // 关闭测绘：仅关闭面板，不清空已生成图层
+  setMeasuringActive(false);
+
+  // 同时确保退出后不会继续响应地图点击绘制
+  setDrawing(false);
+  setDrawMode('none');
+  setTempPoints([]);
+  setRedoStack([]);
+  setEditingLayerId(null);
+  draftGeomRef.current?.clearLayers();
+};
+
+const closeMeasuringUI = () => {
+  setMeasuringActive(false);
+
+  // 不清空固定图层，仅取消当前绘制/编辑草稿
+  setImportPanelOpen(false);
+  setDrawing(false);
+  setDrawMode('none');
+  setTempPoints([]);
+  setRedoStack([]);
+  setEditingLayerId(null);
+  draftGeomRef.current?.clearLayers();
+};
 
 
 
@@ -905,277 +952,408 @@ const renderDynamicExtraInfo = () => {
 
   return (
     <>
-      {/* 主按钮 */}
-      <div className="fixed top-5 right-40 z-[1000] w-72">
-        {!measuringActive ? (
+      {/* 右侧工具按钮：测绘（图标 + 下拉） */}
+      <div className="absolute bottom-8 right-14 sm:top-4 sm:bottom-auto sm:right-[316px] z-[1001]">
+        <div className="relative">
           <button
-            className="bg-blue-600 text-white px-3 py-1 rounded-lg"
-            onClick={() => {
-  // 打开测绘时：要求自动关闭“测量工具”（视同结束对方）
-  onBecameActive?.();
-
-  // 同时按你新需求：切换主功能自动清空，不提示
-  clearAllLayers();
-
-  setMeasuringActive(true);
-}}
-
+            onClick={toggleMeasureDropdown}
+            className={`relative group flex flex-col items-center p-2 rounded-lg transition-colors ${
+              measuringActive ? 'bg-blue-50 text-blue-600' : 'bg-white/90 text-gray-700 hover:bg-gray-100'
+            } shadow-lg`}
+            title="测绘"
+            type="button"
           >
-            开始测绘
+            <Pencil className="w-5 h-5" />
+            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              测绘
+            </span>
           </button>
-        ) : (
-          <button
-            className="bg-gray-600 text-white px-3 py-1 rounded-lg"
-            onClick={() => setMeasuringActive(false)}
+
+          {/* 下拉菜单：仅再次点击“测绘”按钮才收回 */}
+          <div
+            className={`absolute right-0 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 transition-all duration-150 sm:mt-2 sm:top-full sm:origin-top-right max-md:bottom-full max-md:mb-2 max-md:origin-bottom-right ${
+              measureDropdownOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+            }`}
           >
-            退出测绘
-          </button>
-        )}
-      
-        {measuringActive && (
-          <button
-            className="bg-red-600 text-white px-3 py-1 rounded-lg"
-            onClick={clearAllLayers}
-          >
-            清除所有图层
-          </button>
-            ) }
-            
-            { (
-          <button
-        className="bg-purple-800 text-white px-3 py-1 rounded-lg"
-        onClick={() => setImportPanelOpen(!importPanelOpen)}
-      >
-        导入矢量数据
-      </button>
-      
-          
-        )}
-      </div>
-      
-      {/* 测绘菜单 */}
-      {measuringActive && (
-        <div className="fixed top-20 left-10 bg-white p-3 rounded-lg shadow-lg z-[1800] w-96 max-h-[70vh] overflow-y-auto">
-          {/* 点/线/面 */}
-          <div className="flex gap-2 mb-2">
-            {(['point','polyline','polygon'] as const).map(m => (
-              <button
-                key={m}
-                className={`flex-1 py-1 border ${
-                  drawMode === m ? 'bg-blue-300' : ''
-                }`}
-                onClick={() => {
-                  if (tempPoints.length > 0 && drawMode !== m) {
-                    if (!confirm('切换模式将清空当前临时图形？')) return;
-                    tempLayerGroupRef.current?.clearLayers();
-                    setTempPoints([]);
-                  }
-                  setDrawMode(m);
-                  setDrawing(true);
-                  setSubType('默认');
-const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
-setFeatureInfo(hydrated.values ?? {});
-setGroupInfo(hydrated.groups ?? {});
-
-                }}
-              >
-                {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
-              </button>
-            ))}
-          </div>
-      
-          {/* 要素类型下拉 */}
-          {drawMode !== 'none' && (
-            <div className="mb-2">
-              <label className="block text-sm font-bold">要素类型</label>
-              <select
-  value={subType}
-  onChange={e => {
-  const next = e.target.value as FeatureKey; // TS 下 select 的 value 永远是 string，这里断言即可 :contentReference[oaicite:1]{index=1}
-  setSubType(next);
-
-  const hydrated = FORMAT_REGISTRY[next].hydrate({});
-  setFeatureInfo(hydrated.values ?? {});
-  setGroupInfo(hydrated.groups ?? {});
-}}
-
-  className="w-full border p-1 rounded"
->
-  <option value="默认">默认</option>
-  {subTypeOptions.map(k => (
-    <option key={k} value={k}>
-      {FORMAT_REGISTRY[k].label}
-    </option>
-  ))}
-</select>
-
-            </div>
-          )}
-      
-          {/* 颜色 */}
-          {drawMode !== 'none' && (
-            <div className="mb-2">
-              <label className="block mb-1 text-sm">颜色</label>
-              <input
-                type="color"
-                value={drawColor}
-                onChange={e => setDrawColor(e.target.value)}
-                className="w-full"
-              />
-            </div>
-          )}
-      
-          {/* 撤销/重做/完成 */}
-          {drawMode !== 'none' && (
-            <div className="flex gap-2 mb-2">
-              <button className="bg-yellow-400 text-white px-2 py-1 rounded" onClick={handleUndo}>撤销</button>
-              <button className="bg-orange-400 text-white px-2 py-1 rounded" onClick={handleRedo}>重做</button>
-              <button className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1" onClick={finishLayer}>
-                {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
-              </button>
-            </div>
-          )}
-      
-          {/* 临时输出 */}
-          <div className="mb-2">
-            <label className="text-sm font-bold">临时输出</label>
-            <textarea readOnly className="w-full h-20 border p-1" value={currentTempOutput()} />
-          </div>
-      
-      {/* JSON 输入区 */}
-{subType !== '默认' && (
-  <div className="mb-2 border-t pt-2">
-    <label className="text-sm font-bold">附加信息 ({FORMAT_REGISTRY[subType].label})</label>
-
-    {renderDynamicExtraInfo()}
-  </div>
-)}
-
-      
-        </div>
-      )}
-      
-      {importPanelOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-[1000]">
-          <div className="bg-white p-4 rounded-lg shadow-lg w-80 max-h-[70vh] overflow-y-auto">
-      
-            <h3 className="font-bold mb-2">导入矢量数据</h3>
-      
-            <label className="block text-sm font-bold mb-1">格式</label>
-            <select
-              value={importFormat}
-              onChange={e => setImportFormat(e.target.value as ImportFormat)}
-              className="w-full border p-1 rounded mb-2"
-            >
-              <option value="点">点</option>
-              <option value="线">线</option>
-              <option value="面">面</option>
-              <option value="车站">车站</option>
-              <option value="铁路">铁路</option>
-              <option value="站台">站台</option>
-              <option value="车站建筑">车站建筑</option>
-            </select>
-      
-            <label className="block text-sm font-bold mb-1">数据输入</label>
-            <textarea
-              value={importText}
-              onChange={e => setImportText(e.target.value)}
-              className="w-full border p-1 rounded mb-2"
-              placeholder={
-                importFormat === '点' || importFormat === '线' || importFormat === '面'
-                  ? 'x,z;x,z;x,z...'
-                  : '符合 JSON 格式，如数组'
-              }
-              rows={6}
-            />
-      
+            {/* 开始/结束测绘 */}
             <button
-              className="bg-green-600 text-white px-3 py-1 rounded-lg w-full"
-              onClick={handleImport}
+              onClick={toggleMeasuringActiveFromMenu}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+              type="button"
             >
-              导入
+              {measuringActive ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+              <span className={measuringActive ? 'font-medium' : ''}>{measuringActive ? '结束测绘' : '开始测绘'}</span>
             </button>
-      
+
+            {/* 导入数据 */}
+            <button
+              onClick={() => setImportPanelOpen((v) => !v)}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+              type="button"
+            >
+              <Upload className="w-4 h-4" />
+              <span>导入数据</span>
+            </button>
+
+            {/* 清空所有图层 */}
+            <button
+              onClick={clearAllLayers}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+              type="button"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>清空所有图层</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* =========================
+          测绘菜单：桌面端（可拖拽）
+         ========================= */}
+      {measuringActive && (
+        <div className="hidden sm:block">
+          <DraggablePanel id="measuring-main" defaultPosition={{ x: 16, y: 240 }} zIndex={1800}>
+            <div className="bg-white rounded-xl shadow-lg w-96 max-h-[70vh] overflow-hidden border">
+              {/* 标题栏（拖拽区域） */}
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-bold text-gray-800">测绘</h3>
+                <button onClick={closeMeasuringUI} className="text-gray-400 hover:text-gray-600" aria-label="关闭" type="button">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 内容区 */}
+              <div className="p-3 overflow-y-auto max-h-[calc(70vh-48px)]">
+                {/* 点/线/面 */}
+                <div className="flex gap-2 mb-2">
+                  {(['point', 'polyline', 'polygon'] as const).map((m) => (
+                    <button
+                      key={m}
+                      className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
+                      onClick={() => {
+                        if (tempPoints.length > 0 && drawMode !== m) {
+                          if (!confirm('切换模式将清空当前临时图形？')) return;
+                          tempLayerGroupRef.current?.clearLayers();
+                          setTempPoints([]);
+                        }
+                        setDrawMode(m);
+                        setDrawing(true);
+                        setSubType('默认');
+                        const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
+                        setFeatureInfo(hydrated.values ?? {});
+                        setGroupInfo(hydrated.groups ?? {});
+                      }}
+                      type="button"
+                    >
+                      {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 要素类型下拉 */}
+                {drawMode !== 'none' && (
+                  <div className="mb-2">
+                    <label className="block text-sm font-bold">要素类型</label>
+                    <select
+                      value={subType}
+                      onChange={(e) => {
+                        const next = e.target.value as FeatureKey;
+                        setSubType(next);
+
+                        const hydrated = FORMAT_REGISTRY[next].hydrate({});
+                        setFeatureInfo(hydrated.values ?? {});
+                        setGroupInfo(hydrated.groups ?? {});
+                      }}
+                      className="w-full border p-1 rounded"
+                    >
+                      <option value="默认">默认</option>
+                      {subTypeOptions.map((k) => (
+                        <option key={k} value={k}>
+                          {FORMAT_REGISTRY[k].label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* 颜色 */}
+                {drawMode !== 'none' && (
+                  <div className="mb-2">
+                    <label className="block mb-1 text-sm">颜色</label>
+                    <input type="color" value={drawColor} onChange={(e) => setDrawColor(e.target.value)} className="w-full" />
+                  </div>
+                )}
+
+                {/* 撤销/重做/完成 */}
+                {drawMode !== 'none' && (
+                  <div className="flex gap-2 mb-2">
+                    <button className="bg-yellow-400 text-white px-2 py-1 rounded" onClick={handleUndo} type="button">
+                      撤销
+                    </button>
+                    <button className="bg-orange-400 text-white px-2 py-1 rounded" onClick={handleRedo} type="button">
+                      重做
+                    </button>
+                    <button className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1" onClick={finishLayer} type="button">
+                      {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
+                    </button>
+                  </div>
+                )}
+
+                {/* 临时输出 */}
+                <div className="mb-2">
+                  <label className="text-sm font-bold">临时输出</label>
+                  <textarea readOnly className="w-full h-20 border p-1" value={currentTempOutput()} />
+                </div>
+
+                {/* JSON 输入区 */}
+                {subType !== '默认' && (
+                  <div className="mb-2 border-t pt-2">
+                    <label className="text-sm font-bold">附加信息 ({FORMAT_REGISTRY[subType].label})</label>
+                    {renderDynamicExtraInfo()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </DraggablePanel>
+        </div>
+      )}
+
+      {/* 测绘菜单：手机端（固定布局，风格一致） */}
+      {measuringActive && (
+        <div className="sm:hidden fixed top-[240px] left-2 right-2 z-[1800]">
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border max-h-[70vh]">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-bold text-gray-800">测绘</h3>
+              <button onClick={closeMeasuringUI} className="text-gray-400 hover:text-gray-600" aria-label="关闭" type="button">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 overflow-y-auto max-h-[calc(70vh-48px)]">
+              <div className="flex gap-2 mb-2">
+                {(['point', 'polyline', 'polygon'] as const).map((m) => (
+                  <button
+                    key={m}
+                    className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
+                    onClick={() => {
+                      if (tempPoints.length > 0 && drawMode !== m) {
+                        if (!confirm('切换模式将清空当前临时图形？')) return;
+                        tempLayerGroupRef.current?.clearLayers();
+                        setTempPoints([]);
+                      }
+                      setDrawMode(m);
+                      setDrawing(true);
+                      setSubType('默认');
+                      const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
+                      setFeatureInfo(hydrated.values ?? {});
+                      setGroupInfo(hydrated.groups ?? {});
+                    }}
+                    type="button"
+                  >
+                    {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
+                  </button>
+                ))}
+              </div>
+
+              {drawMode !== 'none' && (
+                <div className="mb-2">
+                  <label className="block text-sm font-bold">要素类型</label>
+                  <select
+                    value={subType}
+                    onChange={(e) => {
+                      const next = e.target.value as FeatureKey;
+                      setSubType(next);
+
+                      const hydrated = FORMAT_REGISTRY[next].hydrate({});
+                      setFeatureInfo(hydrated.values ?? {});
+                      setGroupInfo(hydrated.groups ?? {});
+                    }}
+                    className="w-full border p-1 rounded"
+                  >
+                    <option value="默认">默认</option>
+                    {subTypeOptions.map((k) => (
+                      <option key={k} value={k}>
+                        {FORMAT_REGISTRY[k].label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {drawMode !== 'none' && (
+                <div className="mb-2">
+                  <label className="block mb-1 text-sm">颜色</label>
+                  <input type="color" value={drawColor} onChange={(e) => setDrawColor(e.target.value)} className="w-full" />
+                </div>
+              )}
+
+              {drawMode !== 'none' && (
+                <div className="flex gap-2 mb-2">
+                  <button className="bg-yellow-400 text-white px-2 py-1 rounded" onClick={handleUndo} type="button">
+                    撤销
+                  </button>
+                  <button className="bg-orange-400 text-white px-2 py-1 rounded" onClick={handleRedo} type="button">
+                    重做
+                  </button>
+                  <button className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1" onClick={finishLayer} type="button">
+                    {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
+                  </button>
+                </div>
+              )}
+
+              <div className="mb-2">
+                <label className="text-sm font-bold">临时输出</label>
+                <textarea readOnly className="w-full h-20 border p-1" value={currentTempOutput()} />
+              </div>
+
+              {subType !== '默认' && (
+                <div className="mb-2 border-t pt-2">
+                  <label className="text-sm font-bold">附加信息 ({FORMAT_REGISTRY[subType].label})</label>
+                  {renderDynamicExtraInfo()}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
-      
-      
-      
-      
-      
-      
-      {/* ======== 图层控制器 ======== */}
+
+      {/* =========================
+          导入面板：桌面端（可拖拽）
+         ========================= */}
+      {importPanelOpen && (
+        <div className="hidden sm:block">
+          <DraggablePanel id="measuring-import" defaultPosition={{ x: 16, y: 520 }} zIndex={1800}>
+            <div className="bg-white rounded-xl shadow-lg w-96 overflow-hidden border">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-bold text-gray-800">导入矢量数据</h3>
+                <button
+                  onClick={() => setImportPanelOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="关闭"
+                  type="button"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                <label className="block text-sm font-bold mb-1">格式</label>
+                <select value={importFormat} onChange={(e) => setImportFormat(e.target.value as ImportFormat)} className="w-full border p-2 rounded">
+                  <option value="点">点</option>
+                  <option value="线">线</option>
+                  <option value="面">面</option>
+                  <option value="车站">车站</option>
+                  <option value="铁路">铁路</option>
+                  <option value="站台">站台</option>
+                  <option value="车站建筑">车站建筑</option>
+                </select>
+
+                <label className="block text-sm font-bold mb-1">数据输入</label>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  className="w-full border rounded p-2 text-sm"
+                  placeholder={importFormat === '点' || importFormat === '线' || importFormat === '面' ? 'x,z;x,z;x,z...' : '符合 JSON 格式，如数组'}
+                  rows={6}
+                />
+
+                <button className="bg-green-600 text-white px-3 py-2 rounded-lg w-full" onClick={handleImport} type="button">
+                  导入
+                </button>
+              </div>
+            </div>
+          </DraggablePanel>
+        </div>
+      )}
+
+      {/* 导入面板：手机端（固定） */}
+      {importPanelOpen && (
+        <div className="sm:hidden fixed bottom-24 left-2 right-2 z-[1800]">
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-bold text-gray-800">导入矢量数据</h3>
+              <button
+                onClick={() => setImportPanelOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="关闭"
+                type="button"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <label className="block text-sm font-bold mb-1">格式</label>
+              <select value={importFormat} onChange={(e) => setImportFormat(e.target.value as ImportFormat)} className="w-full border p-2 rounded">
+                <option value="点">点</option>
+                <option value="线">线</option>
+                <option value="面">面</option>
+                <option value="车站">车站</option>
+                <option value="铁路">铁路</option>
+                <option value="站台">站台</option>
+                <option value="车站建筑">车站建筑</option>
+              </select>
+
+              <label className="block text-sm font-bold mb-1">数据输入</label>
+              <textarea value={importText} onChange={(e) => setImportText(e.target.value)} className="w-full border rounded p-2 text-sm" rows={6} />
+
+              <button className="bg-green-600 text-white px-3 py-2 rounded-lg w-full" onClick={handleImport} type="button">
+                导入
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======== 图层控制器（位置保持原样，可不做标题栏/拖拽） ======== */}
       {measuringActive && (
         <div className="fixed top-20 right-4 bg-white p-3 rounded-lg shadow-lg z-[1000] w-85 max-h-[70vh] overflow-y-auto">
-      
           <h3 className="font-bold mb-2">测绘图层</h3>
-      
-          {layers.map(l => (
+
+          {layers.map((l) => (
             <div key={l.id} className="flex items-center gap-1 mb-1">
-      
-              {/* 显示/隐藏 */}
               <button
-                className={`px-2 py-1 text-sm ${
-                  l.visible ? 'bg-green-300' : 'bg-gray-300'
-                }`}
+                className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
                 onClick={() => toggleLayerVisible(l.id)}
+                type="button"
               >
                 {l.visible ? '隐藏' : '显示'}
               </button>
-      
-              {/* 上移 */}
-              <button
-                className="px-2 py-1 text-sm bg-blue-200"
-                onClick={() => moveLayerUp(l.id)}
-              >
+
+              <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
                 ↑
               </button>
-      
-              {/* 下移 */}
-              <button
-                className="px-2 py-1 text-sm bg-blue-200"
-                onClick={() => moveLayerDown(l.id)}
-              >
+
+              <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
                 ↓
               </button>
-      
-              {/* 编辑 */}
-              <button
-                className="px-2 py-1 text-sm bg-yellow-300"
-                onClick={() => editLayer(l.id)}
-              >
+
+              <button className="px-2 py-1 text-sm bg-yellow-300" onClick={() => editLayer(l.id)} type="button">
                 编辑
               </button>
-      
-              {/* 删除 */}
-              <button
-                className="px-2 py-1 text-sm bg-red-400 text-white"
-                onClick={() => deleteLayer(l.id)}
-              >
+
+              <button className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
                 删除
               </button>
-      
+
               <button
-        className="px-3 py-1 text-sm bg-purple-400 text-white"
-        onClick={() => {
-          alert(getLayerJSONOutput(l)); // 或显示在 textarea
-        }}
-      >
-        JSON
-      </button>
-      
-      
+                className="px-3 py-1 text-sm bg-purple-400 text-white"
+                onClick={() => {
+                  alert(getLayerJSONOutput(l));
+                }}
+                type="button"
+              >
+                JSON
+              </button>
+
               <div className="flex-1 text-sm truncate">
                 #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
               </div>
-      
             </div>
           ))}
-      
         </div>
       )}
-      
     </>
   );
 }

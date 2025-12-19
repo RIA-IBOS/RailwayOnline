@@ -3,6 +3,8 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createDynmapCRS, ZTH_FLAT_CONFIG, DynmapProjection } from '@/lib/DynmapProjection';
 import { DynmapTileLayer, createDynmapTileLayer } from '@/lib/DynmapTileLayer';
+import { createSketchTileLayer } from '@/lib/SketchTileLayer';
+import { createWatercolorTileLayer } from '@/lib/SketchTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
 import { PlayerLayer } from './PlayerLayer';
@@ -18,18 +20,16 @@ import { Toolbar, LayerControl, AboutCard } from '../Toolbar/Toolbar';
 import { LinesPage } from '../Lines/LinesPage';
 import { PlayersList } from '../Players/PlayersList';
 import { LoadingOverlay } from '../Loading/LoadingOverlay';
+import { DraggablePanel } from '../DraggablePanel/DraggablePanel';
+import { SettingsPanel } from '../Settings/SettingsPanel';
 import { useLoadingStore } from '@/store/loadingStore';
-import { fetchRailwayData, parseRailwayData, getAllStations } from '@/lib/railwayParser';
-import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
-import { fetchLandmarkData, parseLandmarkData } from '@/lib/landmarkParser';
+import { useDataStore } from '@/store/dataStore';
 import { fetchPlayers } from '@/lib/playerApi';
-import { loadMapSettings, saveMapSettings } from '@/lib/cookies';
+import { loadMapSettings, saveMapSettings, MapStyle } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
 import MeasuringModule from '@/components/Mapping/MeasuringModule';
 import MeasurementToolsModule from '@/components/Mapping/Mtools';
-
-
 
 // 世界配置
 const WORLDS = [
@@ -38,12 +38,6 @@ const WORLDS = [
   { id: 'naraku', name: '奈落洲', center: { x: 0, y: 64, z: 0 } },
   { id: 'houtu', name: '后土洲', center: { x: 0, y: 64, z: 0 } }
 ];
-
-// RMP 数据文件映射
-const RMP_DATA_FILES: Record<string, string> = {
-  zth: '/data/rmp_zth.json',
-  houtu: '/data/rmp_houtu.json',
-};
 
 function MapContainer() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -59,10 +53,12 @@ function MapContainer() {
   const [showLandmark, setShowLandmark] = useState(savedSettings?.showLandmark ?? true);
   const [showPlayers, setShowPlayers] = useState(savedSettings?.showPlayers ?? true);
   const [dimBackground, setDimBackground] = useState(savedSettings?.dimBackground ?? false);
+  const [mapStyle, setMapStyle] = useState<MapStyle>(savedSettings?.mapStyle ?? 'default');
   const [showNavigation, setShowNavigation] = useState(false);
   const [showLinesPage, setShowLinesPage] = useState(false);
   const [showPlayersPage, setShowPlayersPage] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [stations, setStations] = useState<ParsedStation[]>([]);
   const [lines, setLines] = useState<ParsedLine[]>([]);
   const [landmarks, setLandmarks] = useState<ParsedLandmark[]>([]);
@@ -77,13 +73,29 @@ function MapContainer() {
     landmark?: ParsedLandmark;
   } | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [measuringCloseSignal, setMeasuringCloseSignal] = useState(0);
+  const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
 
-const [measuringCloseSignal, setMeasuringCloseSignal] = useState(0);
-const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
+  // 面板 z-index 管理（用于置顶）
+  const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
+    navigation: 1001,
+    players: 1001,
+    about: 1001,
+    settings: 1001,
+    lineDetail: 1001,
+    pointDetail: 1001,
+    playerDetail: 1001,
+  });
+  const zIndexCounterRef = useRef(1001);
 
-
-
-
+  // 置顶面板
+  const bringToFront = useCallback((panelId: string) => {
+    zIndexCounterRef.current += 1;
+    setPanelZIndexes(prev => ({
+      ...prev,
+      [panelId]: zIndexCounterRef.current,
+    }));
+  }, []);
 
   // 关闭"铁路图层"时，同时隐藏线路高亮与详情卡片，避免看起来"图层控制不生效"
   useEffect(() => {
@@ -104,6 +116,29 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
     }
   }, [dimBackground]);
 
+  // 地图风格切换
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map || !mapReady) return;
+
+    // 移除旧瓦片图层
+    if (tileLayerRef.current) {
+      tileLayerRef.current.remove();
+    }
+
+    // 添加新瓦片图层
+    let newTileLayer: L.TileLayer;
+    if (mapStyle === 'sketch') {
+      newTileLayer = createSketchTileLayer(currentWorld, 'flat');
+    } else if (mapStyle === 'watercolor') {
+      newTileLayer = createWatercolorTileLayer(currentWorld, 'flat');
+    } else {
+      newTileLayer = createDynmapTileLayer(currentWorld, 'flat');
+    }
+    newTileLayer.addTo(map);
+    tileLayerRef.current = newTileLayer;
+  }, [mapStyle, mapReady, currentWorld]);
+
   // 保存地图设置到 cookie
   useEffect(() => {
     saveMapSettings({
@@ -112,100 +147,59 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
       showLandmark,
       showPlayers,
       dimBackground,
+      mapStyle,
     });
-  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground]);
+  }, [currentWorld, showRailway, showLandmark, showPlayers, dimBackground, mapStyle]);
 
   // 加载状态管理
-  const { startLoading, updateStage, finishLoading, initialized } = useLoadingStore();
+  const { startLoading, updateStage, finishLoading } = useLoadingStore();
+  const { loadAllData, getWorldData, isLoaded: dataLoaded } = useDataStore();
 
-  // 加载搜索数据
+  // 首次加载：预加载所有世界数据
   useEffect(() => {
-    async function loadSearchData() {
-      // 首次加载时显示进度
-      const isFirstLoad = !initialized;
-      if (isFirstLoad) {
-        startLoading([
-          { name: 'railway', label: '铁路数据' },
-          { name: 'rmp', label: 'RMP 线路数据' },
-          { name: 'landmark', label: '地标数据' },
-        ]);
-      }
+    if (dataLoaded) return;
 
-      // 加载 RIA_Data 站点数据
-      if (isFirstLoad) updateStage('railway', 'loading');
-      const railwayData = await fetchRailwayData(currentWorld);
-      const { lines: riaLines } = parseRailwayData(railwayData);
-      if (isFirstLoad) updateStage('railway', 'success');
+    startLoading([
+      { name: 'bureaus', label: '铁路局配置' },
+      { name: 'zth-railway', label: '零洲铁路数据' },
+      { name: 'zth-rmp', label: '零洲 RMP 数据' },
+      { name: 'zth-landmark', label: '零洲地标数据' },
+      { name: 'houtu-railway', label: '后土洲铁路数据' },
+      { name: 'houtu-rmp', label: '后土洲 RMP 数据' },
+      { name: 'houtu-landmark', label: '后土洲地标数据' },
+      { name: 'naraku-railway', label: '奈落洲铁路数据' },
+      { name: 'naraku-landmark', label: '奈落洲地标数据' },
+      { name: 'eden-railway', label: '伊甸铁路数据' },
+      { name: 'eden-landmark', label: '伊甸地标数据' },
+    ]);
 
-      // 加载 RMP 数据（如果有）
-      let rmpLines: ParsedLine[] = [];
-      let rmpStations: ParsedStation[] = [];
-      const rmpFile = RMP_DATA_FILES[currentWorld];
-      if (rmpFile) {
-        if (isFirstLoad) updateStage('rmp', 'loading');
-        try {
-          const rmpData = await fetchRMPData(rmpFile);
-          const parsed = parseRMPData(rmpData, currentWorld);
-          rmpLines = parsed.lines;
-          rmpStations = parsed.stations;
-          if (isFirstLoad) updateStage('rmp', 'success');
-        } catch (e) {
-          console.warn(`Failed to load RMP data for ${currentWorld}:`, e);
-          if (isFirstLoad) updateStage('rmp', 'error', '加载失败');
-        }
-      } else {
-        if (isFirstLoad) updateStage('rmp', 'success');
-      }
+    loadAllData((stage, status) => {
+      updateStage(stage, status);
+    }).then(() => {
+      setTimeout(() => {
+        finishLoading();
+      }, 500);
+    });
+  }, [dataLoaded, loadAllData, startLoading, updateStage, finishLoading]);
 
-      // 合并线路和站点
-      const allLines = [...riaLines, ...rmpLines];
-      const riaStations = getAllStations(riaLines);
+  // 切换世界时从缓存加载数据
+  useEffect(() => {
+    if (!dataLoaded) return;
 
-      // 合并站点：RIA站点优先，RMP站点只添加不重复的
-      const riaStationNames = new Set(riaStations.map(s => s.name));
-      const uniqueRmpStations = rmpStations.filter(s => !riaStationNames.has(s.name));
-      const allStations = [...riaStations, ...uniqueRmpStations];
-
-      setLines(allLines);
-      setStations(allStations);
-
-      // 加载地标数据
-      if (isFirstLoad) updateStage('landmark', 'loading');
-      const landmarkData = await fetchLandmarkData(currentWorld);
-      setLandmarks(parseLandmarkData(landmarkData));
-      if (isFirstLoad) updateStage('landmark', 'success');
-
-      // 加载玩家数据
-      const playersData = await fetchPlayers(currentWorld);
-      setPlayers(playersData);
-
-      // 清除之前的路径
-      setRoutePath(null);
-      setHighlightedLine(null);
-
-      // 完成加载
-      if (isFirstLoad) {
-        // 延迟一点关闭，让用户看到完成状态
-        setTimeout(() => {
-          finishLoading();
-        }, 500);
-      }
+    const worldData = getWorldData(currentWorld);
+    if (worldData) {
+      setLines(worldData.lines);
+      setStations(worldData.stations);
+      setLandmarks(worldData.landmarks);
     }
-    loadSearchData();
-  }, [currentWorld, initialized, startLoading, updateStage, finishLoading]);
 
+    // 加载玩家数据（实时数据，不缓存）
+    fetchPlayers(currentWorld).then(setPlayers);
 
-
-
-
-
-
-
-
-
-
-  
-
+    // 清除之前的路径
+    setRoutePath(null);
+    setHighlightedLine(null);
+  }, [currentWorld, dataLoaded, getWorldData]);
 
   // 搜索结果选中处理
   const handleSearchSelect = useCallback((result: { coord: { x: number; y: number; z: number } }) => {
@@ -336,8 +330,15 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
       tileLayerRef.current.remove();
     }
 
-    // 添加新瓦片图层
-    const newTileLayer = createDynmapTileLayer(worldId, 'flat');
+    // 添加新瓦片图层（根据当前风格选择）
+    let newTileLayer: L.TileLayer;
+    if (mapStyle === 'sketch') {
+      newTileLayer = createSketchTileLayer(worldId, 'flat');
+    } else if (mapStyle === 'watercolor') {
+      newTileLayer = createWatercolorTileLayer(worldId, 'flat');
+    } else {
+      newTileLayer = createDynmapTileLayer(worldId, 'flat');
+    }
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
 
@@ -351,7 +352,7 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
       );
       map.setView(centerLatLng, 2);
     }
-  }, []);
+  }, [mapStyle]);
 
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
@@ -389,8 +390,16 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
     const isDesktop = window.innerWidth >= 640;
     L.control.zoom({ position: isDesktop ? 'bottomright' : 'bottomleft' }).addTo(map);
 
-    // 添加 Dynmap 瓦片图层 - 使用保存的世界
-    const tileLayer = createDynmapTileLayer(savedWorld, 'flat');
+    // 添加 Dynmap 瓦片图层 - 使用保存的世界和风格
+    const savedMapStyle = loadMapSettings()?.mapStyle ?? 'default';
+    let tileLayer: L.TileLayer;
+    if (savedMapStyle === 'sketch') {
+      tileLayer = createSketchTileLayer(savedWorld, 'flat');
+    } else if (savedMapStyle === 'watercolor') {
+      tileLayer = createWatercolorTileLayer(savedWorld, 'flat');
+    } else {
+      tileLayer = createDynmapTileLayer(savedWorld, 'flat');
+    }
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -450,23 +459,21 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
       {/* 地图容器 */}
       <div ref={mapRef} className="w-full h-full" />
 
-<MeasuringModule
-  mapReady={mapReady}
-  leafletMapRef={leafletMapRef}
-  projectionRef={projectionRef}
-  closeSignal={measuringCloseSignal}
-  onBecameActive={() => setMeasureToolsCloseSignal(v => v + 1)}
-/>
+      <MeasuringModule
+      mapReady={mapReady}
+      leafletMapRef={leafletMapRef}
+      projectionRef={projectionRef}
+      closeSignal={measuringCloseSignal}
+      onBecameActive={() => setMeasureToolsCloseSignal(v => v + 1)}
+      />
 
-<MeasurementToolsModule
-  mapReady={mapReady}
-  leafletMapRef={leafletMapRef}
-  projectionRef={projectionRef}
-  closeSignal={measureToolsCloseSignal}
-  onBecameActive={() => setMeasuringCloseSignal(v => v + 1)}
-/>
-
-
+      <MeasurementToolsModule
+      mapReady={mapReady}
+      leafletMapRef={leafletMapRef}
+      projectionRef={projectionRef}
+      closeSignal={measureToolsCloseSignal}
+      onBecameActive={() => setMeasuringCloseSignal(v => v + 1)}
+      />
 
       {/* 铁路图层 - 有路径规划结果时隐藏 */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
@@ -475,6 +482,7 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
           projection={projectionRef.current}
           worldId={currentWorld}
           visible={showRailway && !routePath}
+          mapStyle={mapStyle}
           onStationClick={handleStationClick}
         />
       )}
@@ -524,20 +532,160 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
 
         {/* 工具栏 */}
         <Toolbar
-          onNavigationClick={() => setShowNavigation(true)}
+          onNavigationClick={() => { setShowNavigation(true); bringToFront('navigation'); }}
           onLinesClick={() => setShowLinesPage(true)}
-          onPlayersClick={() => setShowPlayersPage(true)}
-          onHelpClick={() => setShowAbout(true)}
+          onPlayersClick={() => { setShowPlayersPage(true); bringToFront('players'); }}
+          onHelpClick={() => { setShowAbout(true); bringToFront('about'); }}
+          onSettingsClick={() => { setShowSettings(true); bringToFront('settings'); }}
         />
 
+        {/* 手机端：保持原有的流式布局 */}
+        <div className="sm:hidden flex flex-col gap-2">
+          {/* 关于卡片 */}
+          {showAbout && (
+            <AboutCard onClose={() => setShowAbout(false)} />
+          )}
 
-        {/* 关于卡片 */}
-        {showAbout && (
-          <AboutCard onClose={() => setShowAbout(false)} />
+          {/* 设置面板 */}
+          {showSettings && (
+            <SettingsPanel onClose={() => setShowSettings(false)} />
+          )}
+
+          {/* 路径规划面板 */}
+          {showNavigation && (
+            <NavigationPanel
+              stations={stations}
+              lines={lines}
+              landmarks={landmarks}
+              players={players}
+              worldId={currentWorld}
+              onRouteFound={handleRouteFound}
+              onClose={() => setShowNavigation(false)}
+              onPointClick={(coord) => {
+                const map = leafletMapRef.current;
+                const proj = projectionRef.current;
+                if (!map || !proj) return;
+                const latLng = proj.locationToLatLng(coord.x, coord.y || 64, coord.z);
+                map.setView(latLng, 5);
+              }}
+            />
+          )}
+
+          {/* 线路详情卡片 */}
+          {highlightedLine && (
+            <LineDetailCard
+              line={highlightedLine}
+              onClose={() => setHighlightedLine(null)}
+              onStationClick={(_name, coord) => {
+                const map = leafletMapRef.current;
+                const proj = projectionRef.current;
+                if (!map || !proj) return;
+                const latLng = proj.locationToLatLng(coord.x, coord.y || 64, coord.z);
+                map.setView(latLng, 5);
+              }}
+            />
+          )}
+
+          {/* 点位详情卡片 */}
+          {selectedPoint && (() => {
+            const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
+            return (
+              <PointDetailCard
+                selectedPoint={selectedPoint}
+                nearbyStations={nearbyStations}
+                nearbyLandmarks={nearbyLandmarks}
+                lines={lines}
+                onClose={() => setSelectedPoint(null)}
+                onStationClick={handleStationClick}
+                onLandmarkClick={handleLandmarkClick}
+                onLineClick={(line) => {
+                  setSelectedPoint(null);
+                  handleLineSelect(line);
+                }}
+              />
+            );
+          })()}
+
+          {/* 玩家详情卡片 */}
+          {selectedPlayer && (() => {
+            const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
+            const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
+            return (
+              <PlayerDetailCard
+                player={selectedPlayer}
+                nearbyStations={nearbyStations}
+                nearbyLandmarks={nearbyLandmarks}
+                onClose={() => setSelectedPlayer(null)}
+                onStationClick={handleStationClick}
+                onLandmarkClick={handleLandmarkClick}
+              />
+            );
+          })()}
+
+          {/* 玩家列表面板 */}
+          {showPlayersPage && (
+            <PlayersList
+              worldId={currentWorld}
+              onClose={() => setShowPlayersPage(false)}
+              onPlayerSelect={(player) => {
+                setShowPlayersPage(false);
+                handlePlayerClick(player);
+              }}
+              onNavigateToPlayer={() => {
+                setShowPlayersPage(false);
+                setShowNavigation(true);
+              }}
+            />
+          )}
+        </div>
+
+        {/* 清除路径按钮 */}
+        {routePath && routePath.length > 0 && (
+          <button
+            onClick={() => setRoutePath(null)}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span>清除路径</span>
+          </button>
         )}
+      </div>
 
-        {/* 路径规划面板 - 展开时隐藏其他内容 */}
-        {showNavigation && (
+      {/* 桌面端：可拖拽浮动面板 */}
+      {/* 关于卡片 */}
+      {showAbout && (
+        <DraggablePanel
+          id="about"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.about}
+          onFocus={() => bringToFront('about')}
+        >
+          <AboutCard onClose={() => setShowAbout(false)} />
+        </DraggablePanel>
+      )}
+
+      {/* 设置面板 */}
+      {showSettings && (
+        <DraggablePanel
+          id="settings"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.settings}
+          onFocus={() => bringToFront('settings')}
+        >
+          <SettingsPanel onClose={() => setShowSettings(false)} />
+        </DraggablePanel>
+      )}
+
+      {/* 路径规划面板 */}
+      {showNavigation && (
+        <DraggablePanel
+          id="navigation"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.navigation}
+          onFocus={() => bringToFront('navigation')}
+        >
           <NavigationPanel
             stations={stations}
             lines={lines}
@@ -554,12 +702,41 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
               map.setView(latLng, 5);
             }}
           />
-        )}
+        </DraggablePanel>
+      )}
 
-      {/* 线路详情卡片 - 路径规划打开时隐藏 */}
-      {highlightedLine && !showNavigation && !selectedPoint && !selectedPlayer && (
-        <LineDetailCard
-          line={highlightedLine}
+      {/* 玩家列表面板 */}
+      {showPlayersPage && (
+        <DraggablePanel
+          id="players"
+          defaultPosition={{ x: 16, y: 180 }}
+          zIndex={panelZIndexes.players}
+          onFocus={() => bringToFront('players')}
+        >
+          <PlayersList
+            worldId={currentWorld}
+            onClose={() => setShowPlayersPage(false)}
+            onPlayerSelect={(player) => {
+              handlePlayerClick(player);
+            }}
+            onNavigateToPlayer={() => {
+              setShowNavigation(true);
+              bringToFront('navigation');
+            }}
+          />
+        </DraggablePanel>
+      )}
+
+      {/* 线路详情卡片 */}
+      {highlightedLine && (
+        <DraggablePanel
+          id="lineDetail"
+          defaultPosition={{ x: 340, y: 16 }}
+          zIndex={panelZIndexes.lineDetail}
+          onFocus={() => bringToFront('lineDetail')}
+        >
+          <LineDetailCard
+            line={highlightedLine}
             onClose={() => setHighlightedLine(null)}
             onStationClick={(_name, coord) => {
               const map = leafletMapRef.current;
@@ -569,12 +746,19 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
               map.setView(latLng, 5);
             }}
           />
-        )}
+        </DraggablePanel>
+      )}
 
-        {/* 点位详情卡片 */}
-        {selectedPoint && !showNavigation && !selectedPlayer && (() => {
-          const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
-          return (
+      {/* 点位详情卡片 */}
+      {selectedPoint && (() => {
+        const { nearbyStations, nearbyLandmarks } = getNearbyPoints(selectedPoint.coord);
+        return (
+          <DraggablePanel
+            id="pointDetail"
+            defaultPosition={{ x: 340, y: 16 }}
+            zIndex={panelZIndexes.pointDetail}
+            onFocus={() => bringToFront('pointDetail')}
+          >
             <PointDetailCard
               selectedPoint={selectedPoint}
               nearbyStations={nearbyStations}
@@ -588,14 +772,21 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
                 handleLineSelect(line);
               }}
             />
-          );
-        })()}
+          </DraggablePanel>
+        );
+      })()}
 
-        {/* 玩家详情卡片 */}
-        {selectedPlayer && !showNavigation && (() => {
-          const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
-          const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
-          return (
+      {/* 玩家详情卡片 */}
+      {selectedPlayer && (() => {
+        const playerCoord: Coordinate = { x: selectedPlayer.x, y: selectedPlayer.y, z: selectedPlayer.z };
+        const { nearbyStations, nearbyLandmarks } = getNearbyPoints(playerCoord);
+        return (
+          <DraggablePanel
+            id="playerDetail"
+            defaultPosition={{ x: 340, y: 16 }}
+            zIndex={panelZIndexes.playerDetail}
+            onFocus={() => bringToFront('playerDetail')}
+          >
             <PlayerDetailCard
               player={selectedPlayer}
               nearbyStations={nearbyStations}
@@ -604,39 +795,9 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
               onStationClick={handleStationClick}
               onLandmarkClick={handleLandmarkClick}
             />
-          );
-        })()}
-
-        {/* 清除路径按钮 - 路径规划打开时隐藏 */}
-        {routePath && routePath.length > 0 && !showNavigation && (
-          <button
-            onClick={() => setRoutePath(null)}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <span>清除路径</span>
-          </button>
-        )}
-
-        {/* 玩家列表面板 - 在左侧面板内显示 */}
-        {showPlayersPage && (
-          <PlayersList
-            worldId={currentWorld}
-            onClose={() => setShowPlayersPage(false)}
-            onPlayerSelect={(player) => {
-              setShowPlayersPage(false);
-              handlePlayerClick(player);
-            }}
-            onNavigateToPlayer={() => {
-              setShowPlayersPage(false);
-              // 打开导航面板
-              setShowNavigation(true);
-            }}
-          />
-        )}
-      </div>
+          </DraggablePanel>
+        );
+      })()}
 
       {/* 右侧图层控制 - 手机端右下角版权上方，桌面端右上角 */}
       <div className="absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-4 z-[1000]">
@@ -645,10 +806,12 @@ const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
           showLandmark={showLandmark}
           showPlayers={showPlayers}
           dimBackground={dimBackground}
+          mapStyle={mapStyle}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
           onTogglePlayers={setShowPlayers}
           onToggleDimBackground={setDimBackground}
+          onToggleMapStyle={setMapStyle}
         />
       </div>
 

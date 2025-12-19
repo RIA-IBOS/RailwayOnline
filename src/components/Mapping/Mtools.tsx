@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { DynmapProjection } from '@/lib/DynmapProjection';
+import DraggablePanel from '../DraggablePanel/DraggablePanel';
+import { Ruler, X } from 'lucide-react';
+
 
 type WorldPoint = { x: number; z: number };
 
@@ -143,6 +146,11 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
       }),
     });
   };
+
+  const handleClosePanels = () => {
+  hardResetAndClose();
+};
+
 
   // ---------- 根容器挂载/卸载 ----------
   useEffect(() => {
@@ -680,140 +688,335 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
 
   return (
     <>
-      {/* 主按钮：测量工具 */}
-      <div className="fixed top-5 right-4 z-[9999]">
+      {/* 右上角：图标按钮（风格参考 Toolbar.tsx）
+          注意：为了“紧挨右上角 bar 左侧”，这里用了一个经验 right 偏移值。
+          如果仍与右上角 LayerControl 重叠，把 sm:right-[260px] 这个数调大/调小即可。 */}
+      <div className="absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-[260px] z-[1001]">
         <button
           onClick={handleMainToggle}
-          className={`px-4 py-2 rounded text-white ${active ? 'bg-red-600' : 'bg-blue-600'}`}
+          className={`relative group flex flex-col items-center p-2 rounded-lg transition-colors ${
+            active ? 'bg-blue-50 text-blue-600' : 'bg-white/90 text-gray-700 hover:bg-gray-100'
+          } shadow-lg`}
         >
-          {active ? '关闭测量工具' : '测量工具'}
+          <Ruler className="w-5 h-5" />
+          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            测量工具
+          </span>
         </button>
       </div>
 
-      {/* 主面板（仅控制区：tabs + 选项；不包含结果 textarea） */}
+      {/* =========================
+          主操作面板：桌面端（可拖拽）
+         ========================= */}
       {active && (
-        <div className="fixed top-20 left-10 z-[9999] bg-white p-4 rounded shadow-lg w-[520px] max-h-[60vh] overflow-auto">
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              className={`px-3 py-1 rounded ${mainTab === 'measure' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}
-              onClick={() => setMainTab('measure')}
-            >
-              测量
-            </button>
-            <button
-              className={`px-3 py-1 rounded ${mainTab === 'shape' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}
-              onClick={() => setMainTab('shape')}
-            >
-              形状
-            </button>
-            <button
-              className={`px-3 py-1 rounded ${mainTab === 'analysis' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}
-              onClick={() => setMainTab('analysis')}
-            >
-              分析
-            </button>
-
-            <div className="ml-auto">
-              <button className="px-3 py-1 rounded bg-gray-200" onClick={clearAllLayers}>
-                清空本工具图层
+        <DraggablePanel id="mtools-main" defaultPosition={{ x: 16, y: 180 }} zIndex={2200}>
+          <div className="bg-white rounded-xl shadow-lg w-[520px] max-h-[70vh] overflow-hidden">
+            {/* 标题栏（用于拖拽区域，右侧留出关闭按钮） */}
+            <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
+              <h3 className="font-bold text-gray-800">测量工具</h3>
+              <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* 内容区 */}
+            <div className="p-4 space-y-4">
+              {/* tabs + 清空 */}
+              <div className="flex items-center gap-2">
+                <div className="flex border rounded-lg overflow-hidden">
+                  <button
+                    className={`px-4 py-2 text-sm transition-colors ${
+                      mainTab === 'measure' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setMainTab('measure')}
+                  >
+                    测量
+                  </button>
+                  <button
+                    className={`px-4 py-2 text-sm transition-colors ${
+                      mainTab === 'shape' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setMainTab('shape')}
+                  >
+                    形状
+                  </button>
+                  <button
+                    className={`px-4 py-2 text-sm transition-colors ${
+                      mainTab === 'analysis' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setMainTab('analysis')}
+                  >
+                    分析
+                  </button>
+                </div>
+
+                <div className="ml-auto">
+                  <button
+                    className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
+                    onClick={clearAllLayers}
+                  >
+                    清空本工具图层
+                  </button>
+                </div>
+              </div>
+
+              {/* 1) 测量 */}
+              {mainTab === 'measure' && (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-700">
+                    使用方法：在地图上依次点击两点，自动生成连线，并在中点显示距离标签。
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-700 w-12">模式</span>
+                    <select
+                      className="border rounded-lg px-3 py-2 text-sm flex-1"
+                      value={measureMetric}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === 'clear') {
+                          clearAllLayers();
+                          pendingMeasureStartRef.current = null;
+                          setMeasureMetric('euclidean');
+                          return;
+                        }
+                        setMeasureMetric(v as MeasureMetric);
+                      }}
+                    >
+                      <option value="euclidean">直线距离（默认）</option>
+                      <option value="manhattan">曼哈顿距离</option>
+                      <option value="clear">清除</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* 2) 形状 */}
+              {mainTab === 'shape' && (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-700">
+                    圆/方形创建后，可在右侧图层列表选中该层，通过“旋转”滑条调整角度。
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      className={`px-3 py-2 rounded-lg text-sm transition-colors ${
+                        shapeKind === 'circle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      onClick={() => setShapeKind('circle')}
+                    >
+                      圆
+                    </button>
+                    <button
+                      className={`px-3 py-2 rounded-lg text-sm transition-colors ${
+                        shapeKind === 'square' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      onClick={() => setShapeKind('square')}
+                    >
+                      方形
+                    </button>
+                    <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed text-sm" disabled>
+                      多边形:未实装
+                    </button>
+                    <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed text-sm" disabled>
+                      曲线(未实装)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 3) 分析 */}
+              {mainTab === 'analysis' && (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-700">分析模块预留接口（当前未实装）。</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
+                      onClick={runSpatialRelationAnalysis}
+                    >
+                      空间关系
+                    </button>
+                    <button
+                      className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
+                      onClick={runAttributeQuery}
+                    >
+                      属性查询
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </DraggablePanel>
+      )}
+
+      {/* =========================
+          结果输出面板：桌面端（可拖拽，与你要求“分离窗口”一致）
+          仅输出：Layer n + 面积/距离（summaryText）
+         ========================= */}
+      {active && (
+        <DraggablePanel id="mtools-results" defaultPosition={{ x: 16, y: 520 }} zIndex={2200}>
+          <div className="bg-white rounded-xl shadow-lg w-[520px] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-bold text-gray-800">测量结果</h3>
+              <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-3">
+              <textarea
+                className="w-full border rounded-lg p-2 h-28 text-xs"
+                readOnly
+                value={resultsText}
+                placeholder="这里仅显示：Layer n + 面积/距离"
+              />
+            </div>
+          </div>
+        </DraggablePanel>
+      )}
+
+      {/* =========================
+          手机端：DraggablePanel 不渲染，所以这里提供固定布局版本（保持同样风格）
+         ========================= */}
+      {active && (
+        <>
+          <div className="sm:hidden fixed left-2 right-2 bottom-40 z-[2200]">
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-bold text-gray-800">测量工具</h3>
+                <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex border rounded-lg overflow-hidden flex-1">
+                    <button
+                      className={`flex-1 px-4 py-2 text-sm transition-colors ${
+                        mainTab === 'measure' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600'
+                      }`}
+                      onClick={() => setMainTab('measure')}
+                    >
+                      测量
+                    </button>
+                    <button
+                      className={`flex-1 px-4 py-2 text-sm transition-colors ${
+                        mainTab === 'shape' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600'
+                      }`}
+                      onClick={() => setMainTab('shape')}
+                    >
+                      形状
+                    </button>
+                    <button
+                      className={`flex-1 px-4 py-2 text-sm transition-colors ${
+                        mainTab === 'analysis' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600'
+                      }`}
+                      onClick={() => setMainTab('analysis')}
+                    >
+                      分析
+                    </button>
+                  </div>
+
+                  <button
+                    className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
+                    onClick={clearAllLayers}
+                  >
+                    清空
+                  </button>
+                </div>
+
+                {mainTab === 'measure' && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-gray-700">
+                      在地图上依次点击两点，自动生成连线，并在中点显示距离标签。
+                    </div>
+                    <select
+                      className="border rounded-lg px-3 py-2 text-sm w-full"
+                      value={measureMetric}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === 'clear') {
+                          clearAllLayers();
+                          pendingMeasureStartRef.current = null;
+                          setMeasureMetric('euclidean');
+                          return;
+                        }
+                        setMeasureMetric(v as MeasureMetric);
+                      }}
+                    >
+                      <option value="euclidean">直线距离（默认）</option>
+                      <option value="manhattan">曼哈顿距离</option>
+                      <option value="clear">清除</option>
+                    </select>
+                  </div>
+                )}
+
+                {mainTab === 'shape' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        className={`px-3 py-2 rounded-lg text-sm transition-colors ${
+                          shapeKind === 'circle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'
+                        }`}
+                        onClick={() => setShapeKind('circle')}
+                      >
+                        圆
+                      </button>
+                      <button
+                        className={`px-3 py-2 rounded-lg text-sm transition-colors ${
+                          shapeKind === 'square' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'
+                        }`}
+                        onClick={() => setShapeKind('square')}
+                      >
+                        方形
+                      </button>
+                      <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm" disabled>
+                        多边形:未实装
+                      </button>
+                      <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm" disabled>
+                        曲线(未实装)
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {mainTab === 'analysis' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm"
+                      onClick={runSpatialRelationAnalysis}
+                    >
+                      空间关系
+                    </button>
+                    <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm" onClick={runAttributeQuery}>
+                      属性查询
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* 1) 测量 */}
-          {mainTab === 'measure' && (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-700">
-                使用方法：在地图上依次点击两点，自动生成连线，并在中点显示距离标签。
+          <div className="sm:hidden fixed left-2 right-2 bottom-8 z-[2200]">
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-bold text-gray-800">测量结果</h3>
+                <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm">模式：</span>
-                <select
-                  className="border rounded px-2 py-1"
-                  value={measureMetric}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (v === 'clear') {
-                      clearAllLayers();
-                      pendingMeasureStartRef.current = null;
-                      setMeasureMetric('euclidean');
-                      return;
-                    }
-                    setMeasureMetric(v as MeasureMetric);
-                  }}
-                >
-                  <option value="euclidean">直线距离（默认）</option>
-                  <option value="manhattan">曼哈顿距离</option>
-                  <option value="clear">清除</option>
-                </select>
+              <div className="p-3">
+                <textarea className="w-full border rounded-lg p-2 h-24 text-xs" readOnly value={resultsText} />
               </div>
             </div>
-          )}
-
-          {/* 2) 形状 */}
-          {mainTab === 'shape' && (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-700">
-                圆/方形创建后，可在右侧图层列表选中该层，通过“旋转”滑条调整角度。
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  className={`px-3 py-1 rounded ${shapeKind === 'circle' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}
-                  onClick={() => setShapeKind('circle')}
-                >
-                  圆
-                </button>
-                <button
-                  className={`px-3 py-1 rounded ${shapeKind === 'square' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}
-                  onClick={() => setShapeKind('square')}
-                >
-                  方形
-                </button>
-                <button className="px-3 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed" disabled>
-                  多边形:未实装
-                </button>
-                <button className="px-3 py-1 rounded bg-gray-100 text-gray-400 cursor-not-allowed" disabled>
-                  曲线(未实装)
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 3) 分析 */}
-          {mainTab === 'analysis' && (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-700">分析模块预留接口（当前未实装）。</div>
-              <div className="flex items-center gap-2">
-                <button className="px-3 py-1 rounded bg-gray-200" onClick={runSpatialRelationAnalysis}>
-                  空间关系
-                </button>
-                <button className="px-3 py-1 rounded bg-gray-200" onClick={runAttributeQuery}>
-                  属性查询
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        </>
       )}
 
-      {/* 结果输出窗口（独立于主面板；只显示 Layer n + 面积/距离） */}
+      {/* 图层管理（按你要求：可不做标题栏/拖拽；位置保持不变） */}
       {active && (
-        <div className="fixed top-[520px] left-10 z-[9999] bg-white p-3 rounded shadow-lg w-[520px]">
-          <div className="font-semibold mb-2 text-sm">结果输出</div>
-          <textarea
-            className="w-full border rounded p-2 h-28 text-xs"
-            readOnly
-            value={resultsText}
-            placeholder="这里仅显示：Layer n + 面积/距离"
-          />
-        </div>
-      )}
-
-      {/* 图层管理（只含：上移/下移/显隐/删除；额外提供“选中”用于旋转） */}
-      {active && (
-        <div className="fixed top-20 right-4 z-[9999] bg-white p-3 rounded shadow-lg w-[360px] max-h-[75vh] overflow-auto">
+        <div className="fixed top-20 right-4 z-[2100] bg-white p-3 rounded-lg shadow-lg w-[360px] max-h-[75vh] overflow-auto">
           <div className="font-semibold mb-2">测量图层管理</div>
 
           {layers.length === 0 && <div className="text-xs text-gray-500">暂无图层</div>}
@@ -829,20 +1032,13 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                   role="button"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="text-sm font-medium">
-                      Layer {idx + 1} ({l.kind})
-                    </div>
+                    <div className="text-sm font-medium">Layer {idx + 1}</div>
+
                     <div className="ml-auto flex items-center gap-1">
-                      <button
-                        className="px-2 py-1 rounded bg-gray-200"
-                        onClick={e => (e.stopPropagation(), moveUp(l.id))}
-                      >
+                      <button className="px-2 py-1 rounded bg-gray-200" onClick={e => (e.stopPropagation(), moveUp(l.id))}>
                         ↑
                       </button>
-                      <button
-                        className="px-2 py-1 rounded bg-gray-200"
-                        onClick={e => (e.stopPropagation(), moveDown(l.id))}
-                      >
+                      <button className="px-2 py-1 rounded bg-gray-200" onClick={e => (e.stopPropagation(), moveDown(l.id))}>
                         ↓
                       </button>
                       <button
@@ -860,7 +1056,6 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                     </div>
                   </div>
 
-                  {/* 图层管理可以显示细节；优先 detailText，其次 summaryText（兼容你尚未全改完的情况） */}
                   <div className="text-xs text-gray-600 mt-1 break-words">
                     {(l as any).detailText ?? (l as any).summaryText ?? ''}
                   </div>
@@ -887,44 +1082,60 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
         </div>
       )}
 
-      {/* 半径输入弹窗（圆/椭圆） */}
+      {/* 半径输入弹窗（圆/椭圆）—— 增加标题栏与关闭按钮 */}
       {active && radiusModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded shadow-lg w-[420px] p-4">
-            <div className="font-semibold mb-3">输入圆半径（x 方向 / z 方向）</div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-20 text-sm">x 半径</div>
-                <input
-                  className="border rounded px-2 py-1 flex-1"
-                  value={rxInput}
-                  onChange={e => setRxInput(e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-20 text-sm">z 半径</div>
-                <input
-                  className="border rounded px-2 py-1 flex-1"
-                  value={rzInput}
-                  onChange={e => setRzInput(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 mt-4">
+          <div className="bg-white rounded-xl shadow-lg w-[420px] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-bold text-gray-800">输入圆半径</h3>
               <button
-                className="px-3 py-1 rounded bg-gray-200"
                 onClick={() => {
                   pendingCircleCenterRef.current = null;
                   setRadiusModalOpen(false);
                 }}
+                className="text-gray-400 hover:text-gray-600"
               >
-                取消
+                <X className="w-5 h-5" />
               </button>
-              <button className="px-3 py-1 rounded bg-blue-600 text-white" onClick={confirmCreateEllipse}>
-                确认生成
-              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-20 text-sm">x 半径</div>
+                  <input
+                    className="border rounded-lg px-2 py-2 flex-1"
+                    value={rxInput}
+                    onChange={e => setRxInput(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-20 text-sm">z 半径</div>
+                  <input
+                    className="border rounded-lg px-2 py-2 flex-1"
+                    value={rzInput}
+                    onChange={e => setRzInput(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button
+                  className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
+                  onClick={() => {
+                    pendingCircleCenterRef.current = null;
+                    setRadiusModalOpen(false);
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+                  onClick={confirmCreateEllipse}
+                >
+                  确认生成
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -932,3 +1143,4 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
     </>
   );
 }
+
