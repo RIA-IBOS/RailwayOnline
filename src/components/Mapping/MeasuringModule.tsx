@@ -8,10 +8,14 @@ import {
   getSubTypeOptions,
   layerToJsonText,
   parseCoordListFlexible,
+  validateImportItemDetailed,
+  validateRequiredDetailed,
+  formatMissingEntries,
   type FeatureKey,
   type ImportFormat,
   type DrawMode,
 } from '@/components/Mapping/featureFormats';
+
 
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
@@ -24,6 +28,23 @@ import AssistLineTools, {
   type AssistLineToolsHandle,
 } from '@/components/Mapping/AssistLineTools';
 
+import GridSnapModeSwitch, {
+  formatGridNumber,
+  snapWorldPointByMode,
+} from '@/components/Mapping/GridSnapModeSwitch';
+
+import ManualPointInput from '@/components/Mapping/ManualPointInput';
+
+import MergePointPlatformStation, {
+  type MergePointPlatformStationDraft,
+} from '@/components/Mapping/Special/MergePointPlatformStation';
+
+import MergePolygonOutlineBuilding, {
+  type MergePolygonOutlineBuildingDraft,
+} from '@/components/Mapping/Special/MergePolygonOutlineBuilding';
+
+import RailwayDirectionReverseButton from '@/components/Mapping/Special/RailwayDirectionReverseButton';
+
 
 /**
  * 关键：把 MapContainer 里的引用对象（ref）当 props 传进来
@@ -34,6 +55,9 @@ type MeasuringModuleProps = {
   leafletMapRef: React.MutableRefObject<L.Map | null>;
   projectionRef: React.MutableRefObject<DynmapProjection | null>;
 
+  // 当前世界（来自 MapContainer 的 currentWorld），用于自动写入 featureInfo.World
+  currentWorldId: string;
+
   // 新增：外部强制关闭信号（MapContainer 递增）
   closeSignal?: number;
 
@@ -42,7 +66,7 @@ type MeasuringModuleProps = {
 };
 
 export default function MeasuringModule(props: MeasuringModuleProps) {
-  const { mapReady, leafletMapRef, projectionRef, closeSignal, onBecameActive } = props;
+  const { mapReady, leafletMapRef, projectionRef, currentWorldId, closeSignal, onBecameActive } = props;
 
 
 // ---------- 测绘 & 图层管理状态 ------------
@@ -51,27 +75,35 @@ const [drawMode, setDrawMode] = useState<'none'|'point'|'polyline'|'polygon'>('n
 const [drawColor, setDrawColor] = useState('#ff0000');         // 当前颜色
 const [drawing, setDrawing] = useState(false);                  // 是否正在绘制中
 
-// 当前临时点集合（临时绘制的坐标）
-const [tempPoints, setTempPoints] = useState<Array<{x:number;z:number}>>([]);
 
+// 当前临时点集合（临时绘制的坐标）
+// 说明：y 为可选（仅在部分 JSON 子类型需要输出 [x,y,z] 时使用；地图渲染仍使用固定 y=64）
+const [tempPoints, setTempPoints] = useState<Array<{ x: number; z: number; y?: number }>>([]);
+
+
+
+
+// editingBackupCoordsRef 同样加 y?
+const editingBackupCoordsRef = useRef<{ x: number; z: number; y?: number }[] | null>(null);
 
 
 
 
 // 扩展 LayerType 定义（包含 jsonInfo）
+// 扩展 LayerType 定义（包含 jsonInfo）
 type LayerType = {
   id: number;
   mode: 'point' | 'polyline' | 'polygon';
   color: string;
-  coords: { x: number; z: number }[];
+  coords: { x: number; z: number; y?: number }[];
   visible: boolean;
   leafletGroup: L.LayerGroup;
   jsonInfo?: {
-  subType: FeatureKey;
-  featureInfo: any;
+    subType: FeatureKey;
+    featureInfo: any;
+  };
 };
 
-};
 
 // 所有固定图层
 const [layers, setLayers] = useState<LayerType[]>([]);
@@ -84,13 +116,16 @@ const [editingLayerId, setEditingLayerId] = useState<number|null>(null);
 const [subType, setSubType] = useState<FeatureKey>('默认');
 
 // 撤销/重做栈
-const [redoStack, setRedoStack] = useState<Array<{ x: number; z: number }>>([]);
+const [redoStack, setRedoStack] = useState<Array<{ x: number; z: number; y?: number }>>([]);
 
 // 当前 JSON 特征信息
 const [featureInfo, setFeatureInfo] = useState<any>({});
 
 // JSON 表单：动态 fields/groups（由 FORMAT_REGISTRY[subType] 驱动）
 const [groupInfo, setGroupInfo] = useState<Record<string, any[]>>({});
+
+// 编辑者ID：用于自动写入 CreateBy / ModifityBy（不直接作为附加字段输出）
+const [editorIdInput, setEditorIdInput] = useState('');
 
 // ======== 切换确认：附加信息不为空时提示可能丢失 ========
 const [switchWarnOpen, setSwitchWarnOpen] = useState(false);
@@ -145,6 +180,44 @@ const confirmExtraSwitch = () => {
 const cancelExtraSwitch = () => {
   pendingSwitchActionRef.current = null;
   setSwitchWarnOpen(false);
+};
+
+
+// ======== 结束测绘确认：任何触发“清空测绘图层 + 关闭测绘”的操作都必须二次确认 ========
+const [endMeasuringWarnOpen, setEndMeasuringWarnOpen] = useState(false);
+
+const endMeasuringNow = () => {
+  // 1) 关闭 UI
+  setMeasuringActive(false);
+
+  // 2) 清空测绘图层（fixedRoot + 状态）
+  clearAllLayers();
+
+  // 3) 收起导入面板（可选）
+  setImportPanelOpen(false);
+
+  // 4) 退出绘制态
+  setDrawing(false);
+  setDrawMode('none');
+  setTempPoints([]);
+  setRedoStack([]);
+  setEditingLayerId(null);
+
+  // 5) 额外锁定/抑制归零
+  setDrawClickSuppressed(false);
+  setShowDraftControlPointsLocked(false);
+
+  // 6) 关闭确认框
+  setEndMeasuringWarnOpen(false);
+};
+
+
+const confirmEndMeasuring = () => {
+  endMeasuringNow();
+};
+
+const cancelEndMeasuring = () => {
+  setEndMeasuringWarnOpen(false);
 };
 
 
@@ -217,31 +290,101 @@ const [jsonPanelOpen, setJsonPanelOpen] = useState(false);
 const [jsonPanelText, setJsonPanelText] = useState('');
 
 
+type SpecialDraftMode =
+  | 'none'
+  | 'merge-point-platform-station'
+  | 'merge-polygon-outline-building';
 
-// A) 外部强制关闭：视同“结束测绘”，并且清空图层（不提示）
+const [specialDraftMode, setSpecialDraftMode] = useState<SpecialDraftMode>('none');
+
+const [mergePointPSDraft, setMergePointPSDraft] = useState<MergePointPlatformStationDraft>({
+  platforms: [],
+  station: null,
+});
+
+const [mergePolygonOBDraft, setMergePolygonOBDraft] = useState<MergePolygonOutlineBuildingDraft>({
+  outline: null,
+  building: null,
+});
+
+const resetSpecialDrafts = () => {
+  setSpecialDraftMode('none');
+  setMergePointPSDraft({ platforms: [], station: null });
+  setMergePolygonOBDraft({ outline: null, building: null });
+};
+
+const hasSpecialDraftData = () => {
+  const hasBundleData = (b: any) => {
+    if (!b) return false;
+    const values = b.values ?? {};
+    const groups = b.groups ?? {};
+    const hasValues = Object.values(values).some((v: any) => {
+      if (v === null || v === undefined) return false;
+      if (typeof v === 'string') return v.trim().length > 0;
+      if (typeof v === 'number') return true;
+      if (typeof v === 'boolean') return v;
+      return Boolean(v);
+    });
+    const hasGroups = Object.values(groups).some((v: any) => Array.isArray(v) ? v.length > 0 : Boolean(v));
+    return hasValues || hasGroups;
+  };
+
+  if (specialDraftMode === 'merge-point-platform-station') {
+    if ((mergePointPSDraft.platforms ?? []).some(hasBundleData)) return true;
+    if (hasBundleData(mergePointPSDraft.station)) return true;
+  }
+  if (specialDraftMode === 'merge-polygon-outline-building') {
+    if (hasBundleData(mergePolygonOBDraft.outline)) return true;
+    if (hasBundleData(mergePolygonOBDraft.building)) return true;
+  }
+  return false;
+};
+
+const requestExitSpecialDraftIfNeeded = (next: () => void) => {
+  if (specialDraftMode !== 'none' && hasSpecialDraftData()) {
+    if (!confirm('切换将退出“合一”模式并丢弃其中的附加信息，确定继续吗？')) return;
+  }
+  next();
+};
+
+
+
+
+// ===== 外部 closeSignal：视同“结束测绘” =====
+// 关键点：
+// 1) 忽略首次挂载（避免刷新时误触发）
+// 2) 只有在“测绘已开启 或 当前存在测绘内容/编辑/绘制”时才确认
+const closeSignalInitRef = useRef(false);
+const lastCloseSignalRef = useRef<any>(undefined);
+
 useEffect(() => {
   if (closeSignal === undefined) return;
 
-  // 关闭 UI
-  setMeasuringActive(false);
+  // 忽略首次挂载拿到的初始值（解决：刷新就弹）
+  if (!closeSignalInitRef.current) {
+    closeSignalInitRef.current = true;
+    lastCloseSignalRef.current = closeSignal;
+    return;
+  }
 
-  // 清空测绘图层
-  clearAllLayers();
+  // 防重复：同一个 closeSignal 值不重复处理
+  if (closeSignal === lastCloseSignalRef.current) return;
+  lastCloseSignalRef.current = closeSignal;
 
-  // 关闭导入面板（如果你希望一并收起）
-  setImportPanelOpen(false);
+  // 只有在“测绘开启/有内容”时才需要确认
+  const hasMeasuringContent =
+    measuringActive ||
+    (layersRef.current?.length ?? 0) > 0 ||
+    drawing ||
+    editingLayerId !== null ||
+    tempPoints.length > 0;
 
-  // 退出绘制态
-  setDrawing(false);
-  setDrawMode('none');
-  setTempPoints([]);
-  setRedoStack([]);
-  setEditingLayerId(null);
+  if (!hasMeasuringContent) return;
 
-  setDrawClickSuppressed(false);
-  setShowDraftControlPointsLocked(false);
+  // 统一走同一个确认入口（避免你现在两套 confirm 文案/逻辑）
+  confirmExitAndClear('结束测绘');
+}, [closeSignal, measuringActive, drawing, editingLayerId, tempPoints.length]);
 
-}, [closeSignal]);
 
 
 // 下拉菜单开关（仅再次点击“测绘”主按钮才收回）
@@ -251,53 +394,53 @@ const toggleMeasureDropdown = () => {
   setMeasureDropdownOpen((v) => !v);
 };
 
+const confirmExitAndClear = (actionLabel: string) => {
+  // 统一二次确认：任何“退出测绘并清理图层”的入口都走这里
+  const ok = window.confirm(`${actionLabel}将清除所有测绘图层，是否确认？`);
+  if (!ok) return false;
+
+  // 关闭测绘与面板
+  setMeasuringActive(false);
+  setMeasureDropdownOpen(false);
+  setImportPanelOpen(false);
+
+  // 清空测绘图层（fixed + draft）及状态
+  clearAllLayers();
+
+  // 额外确保草稿容器也清掉（避免残留）
+  draftGeomRef.current?.clearLayers();
+
+  // 退出绘制/编辑态（双保险）
+  setDrawing(false);
+  setDrawMode('none');
+  setTempPoints([]);
+  setRedoStack([]);
+  setEditingLayerId(null);
+
+  return true;
+};
+
 const toggleMeasuringActiveFromMenu = () => {
   if (!measuringActive) {
-    // 打开测绘时：通知外部关闭“测量工具”（视同结束对方）
+    // 打开测绘时：通知外部关闭“测量工具”
     onBecameActive?.();
 
-    // 切换主功能自动清空（不提示）
+    // 你原逻辑：开启测绘前清空（如果你也希望这里确认，把这行替换成 confirmExitAndClear('开始测绘')）
     clearAllLayers();
 
     setMeasuringActive(true);
     return;
   }
 
-  // 关闭测绘：仅关闭面板，不清空已生成图层
-  setMeasuringActive(false);
-  setDrawClickSuppressed(false);
-  setShowDraftControlPointsLocked(false);
-
-
-  // 同时确保退出后不会继续响应地图点击绘制
-  setDrawing(false);
-  setDrawMode('none');
-  setTempPoints([]);
-  setRedoStack([]);
-  setEditingLayerId(null);
-  clearDraftOverlays();
-  setShowDraftControlPoints(false);
-  setShowDraftControlPointCoords(false);
-
+  // 结束测绘：必须二次确认 + 清理
+  confirmExitAndClear('结束测绘');
 };
 
 const closeMeasuringUI = () => {
-  setMeasuringActive(false);
-
-  // 不清空固定图层，仅取消当前绘制/编辑草稿
-  setImportPanelOpen(false);
-  setDrawing(false);
-  setDrawMode('none');
-  setTempPoints([]);
-  setRedoStack([]);
-  setEditingLayerId(null);
-  clearDraftOverlays();
-  setShowDraftControlPoints(false);
-  setShowDraftControlPointCoords(false);
-
-  setDrawClickSuppressed(false);
-  setShowDraftControlPointsLocked(false);
+  // 右上角 X：也视同“退出测绘并清理”，必须二次确认
+  confirmExitAndClear('退出测绘');
 };
+
 
 
 
@@ -429,6 +572,12 @@ const onMapDrawClick = (e: L.LeafletMouseEvent) => {
     if (r?.point) newPoint = r.point;
   }
 
+  // ② 网格化（整数 / 0.5 / 强制中心）：在“辅助线修正”之后立刻对点击坐标做修正
+  newPoint = snapWorldPointByMode(newPoint);
+
+  // ③ 常规 undo/redo：一旦新增点，redoStack 必须清空
+  setRedoStack([]);
+
   setTempPoints((prev) => {
     const updated = [...prev, newPoint];
     drawDraftGeometry(updated, drawMode, drawColor);
@@ -437,6 +586,29 @@ const onMapDrawClick = (e: L.LeafletMouseEvent) => {
   });
 };
 
+const onManualPointSubmit = (v: { x: number; y: number; z: number }) => {
+  if (!measuringActive || !drawing || drawMode === 'none') return;
+  if (controlPointsTRef.current?.isBusy?.()) return;
+  if (drawClickSuppressedRef.current) return;
+
+  // 点要素：y 归入 elevation；线/面：y 归入坐标
+  if (drawMode === 'point') {
+    setFeatureInfo((prev: any) => ({ ...(prev ?? {}), elevation: v.y }));
+  }
+
+  const newPoint = drawMode === 'point'
+    ? ({ x: v.x, z: v.z } as { x: number; z: number })
+    : ({ x: v.x, z: v.z, y: v.y } as { x: number; z: number; y: number });
+
+  setRedoStack([]);
+
+  setTempPoints((prev) => {
+    const updated = [...prev, newPoint];
+    drawDraftGeometry(updated, drawMode, drawColor);
+    updateLatestEndpointMarker({ x: v.x, z: v.z }, drawColor);
+    return updated;
+  });
+};
 
 
 
@@ -468,7 +640,21 @@ const onMapDrawClick = (e: L.LeafletMouseEvent) => {
    }
  };
  
- 
+// 颜色变化时：立即刷新草稿图形（避免“必须保存后颜色才变化”）
+useEffect(() => {
+  if (!measuringActive) return;
+  if (!drawing || drawMode === 'none') return;
+
+  drawDraftGeometry(tempPoints, drawMode, drawColor);
+
+  // 端点临时点：仅在本来就存在时更新颜色（避免把“已清除的端点点”又画回来）
+  const ep = draftEndpointRef.current;
+  if (ep && ep.getLayers().length > 0 && tempPoints.length > 0) {
+    updateLatestEndpointMarker(tempPoints[tempPoints.length - 1], drawColor);
+  }
+}, [drawColor, measuringActive, drawing, drawMode]);
+
+
 useEffect(() => {
   const proj = projectionRef.current;
   const g = draftVertexOverlayRef.current;
@@ -489,7 +675,7 @@ useEffect(() => {
 
   for (const p of tempPoints) {
     const ll = proj.locationToLatLng(p.x, 64, p.z);
-    const label = `${Math.round(p.x)}, ${Math.round(p.z)}`;
+    const label = `${formatGridNumber(p.x)}, ${formatGridNumber(p.z)}`;
 
     const isInvisibleForLabelOnly = controlPointsTActive && showDraftControlPointCoords;
 
@@ -584,31 +770,265 @@ const finishLayer = () => {
   if (editingLayerId === null && finalCoords.length === 0) return;
   if (editingLayerId !== null && finalCoords.length === 0) return;
 
-  // 统一由 registry 生成最终 featureInfo（不再在组件内手写各种 subtype 注入）
+  const makeLeafletGroup = (mode: DrawMode, coords: { x: number; z: number; y?: number }[], color: string) => {
+    const g = L.layerGroup();
+    const latlngs = coords.map(p => proj.locationToLatLng(p.x, 64, p.z));
+
+    if (mode === 'point') {
+      latlngs.forEach(ll => {
+        L.circleMarker(ll, { color, fillColor: color, radius: 6 }).addTo(g);
+      });
+    } else if (mode === 'polyline') {
+      L.polyline(latlngs, { color }).addTo(g);
+    } else if (mode === 'polygon') {
+      if (latlngs.length > 2) L.polygon(latlngs, { color }).addTo(g);
+      else L.polyline(latlngs, { color }).addTo(g);
+    }
+
+    return g;
+  };
+
+  const cleanupAfterFinish = () => {
+    draftGeomRef.current?.clearLayers();
+    draftEndpointRef.current?.clearLayers();
+
+    setTempPoints([]);
+    setRedoStack([]);
+    setEditingLayerId(null);
+    editingBackupCoordsRef.current = null;
+
+    setDrawing(false);
+    setDrawMode('none');
+
+    resetSpecialDrafts();
+
+    setSubType('默认');
+    const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
+    setFeatureInfo(hydrated.values ?? {});
+    setGroupInfo(hydrated.groups ?? {});
+  };
+
+  // =========================
+  // Special：多点合一（站台+车站）
+  // =========================
+  if (specialDraftMode === 'merge-point-platform-station') {
+    if (editingLayerId !== null) {
+      alert('“多点合一”仅支持新建图层，不支持在编辑模式下保存。');
+      return;
+    }
+    if (drawMode !== 'point') {
+      alert('“多点合一”仅支持点要素。');
+      return;
+    }
+
+    const p0 = finalCoords[finalCoords.length - 1];
+    const pointCoords = [{ x: p0.x, z: p0.z, y: p0.y }];
+
+    const outputs: LayerType[] = [];
+
+    const addOne = (k: string, values: any, groups: any) => {
+      const def: any = (FORMAT_REGISTRY as any)[k];
+      if (!def) {
+        alert(`缺少格式定义：${k}`);
+        return false;
+      }
+
+      const req = validateRequiredDetailed(def, values ?? {}, groups ?? {});
+      if (!req.ok) {
+        const detail = formatMissingEntries(req.missing);
+        alert(`无法保存，${k} 的必填附加信息为空：\n${detail}`);
+        return false;
+      }
+
+      const featureInfoOut = def.buildFeatureInfo({
+        op: 'create',
+        mode: 'point',
+        coords: pointCoords,
+        values: values ?? {},
+        groups: groups ?? {},
+        worldId: currentWorldId,
+        editorId: editorIdInput,
+        prevFeatureInfo: undefined,
+        now: new Date(),
+      });
+
+      const id = nextLayerId.current++;
+      const newGroup = makeLeafletGroup('point', pointCoords, drawColor);
+
+      outputs.push({
+        id,
+        mode: 'point',
+        color: drawColor,
+        coords: pointCoords,
+        visible: true,
+        leafletGroup: newGroup,
+        jsonInfo: {
+          subType: k as unknown as FeatureKey,
+          featureInfo: featureInfoOut,
+        },
+      });
+
+      return true;
+    };
+
+    const hasPlatforms = (mergePointPSDraft.platforms ?? []).length > 0;
+    const hasStation = Boolean(mergePointPSDraft.station);
+
+    if (!hasPlatforms && !hasStation) {
+      alert('多点合一：请至少添加一个“站台”或一个“车站”。');
+      return;
+    }
+
+    // 站台（多个）
+    for (let i = 0; i < (mergePointPSDraft.platforms ?? []).length; i++) {
+      const b = mergePointPSDraft.platforms[i];
+      const ok = addOne('站台', b?.values, b?.groups);
+      if (!ok) return;
+    }
+
+    // 车站（最多一个）
+    if (mergePointPSDraft.station) {
+      const ok = addOne('车站', mergePointPSDraft.station.values, mergePointPSDraft.station.groups);
+      if (!ok) return;
+    }
+
+    setLayers(prev => {
+      const next = [...prev, ...outputs];
+      syncFixedRoot(next, null);
+      return next;
+    });
+
+    cleanupAfterFinish();
+    return;
+  }
+
+  // =========================
+  // Special：多面合一（站台轮廓 + 车站建筑）
+  // =========================
+  if (specialDraftMode === 'merge-polygon-outline-building') {
+    if (editingLayerId !== null) {
+      alert('“多面合一”仅支持新建图层，不支持在编辑模式下保存。');
+      return;
+    }
+    if (drawMode !== 'polygon') {
+      alert('“多面合一”仅支持面要素。');
+      return;
+    }
+    if (finalCoords.length < 3) {
+      alert('面要素至少需要 3 个控制点。');
+      return;
+    }
+
+    const outputs: LayerType[] = [];
+
+    const addOnePolygon = (k: string, values: any, groups: any) => {
+      const def: any = (FORMAT_REGISTRY as any)[k];
+      if (!def) {
+        alert(`缺少格式定义：${k}`);
+        return false;
+      }
+
+      const req = validateRequiredDetailed(def, values ?? {}, groups ?? {});
+      if (!req.ok) {
+        const detail = formatMissingEntries(req.missing);
+        alert(`无法保存，${k} 的必填附加信息为空：\n${detail}`);
+        return false;
+      }
+
+      const featureInfoOut = def.buildFeatureInfo({
+        op: 'create',
+        mode: 'polygon',
+        coords: finalCoords,
+        values: values ?? {},
+        groups: groups ?? {},
+        worldId: currentWorldId,
+        editorId: editorIdInput,
+        prevFeatureInfo: undefined,
+        now: new Date(),
+      });
+
+      const id = nextLayerId.current++;
+      const newGroup = makeLeafletGroup('polygon', finalCoords, drawColor);
+
+      outputs.push({
+        id,
+        mode: 'polygon',
+        color: drawColor,
+        coords: finalCoords,
+        visible: true,
+        leafletGroup: newGroup,
+        jsonInfo: {
+          subType: k as unknown as FeatureKey,
+          featureInfo: featureInfoOut,
+        },
+      });
+
+      return true;
+    };
+
+    const outlineKey = '站台轮廓';
+    const buildingKey = '车站建筑';
+
+    const hasOutline = Boolean(mergePolygonOBDraft.outline);
+    const hasBuilding = Boolean(mergePolygonOBDraft.building);
+
+    if (!hasOutline && !hasBuilding) {
+      alert('多面合一：请至少添加一个“站台轮廓”或一个“车站建筑”。');
+      return;
+    }
+
+    if (mergePolygonOBDraft.outline) {
+      const ok = addOnePolygon(outlineKey, mergePolygonOBDraft.outline.values, mergePolygonOBDraft.outline.groups);
+      if (!ok) return;
+    }
+
+    if (mergePolygonOBDraft.building) {
+      const ok = addOnePolygon(buildingKey, mergePolygonOBDraft.building.values, mergePolygonOBDraft.building.groups);
+      if (!ok) return;
+    }
+
+    setLayers(prev => {
+      const next = [...prev, ...outputs];
+      syncFixedRoot(next, null);
+      return next;
+    });
+
+    cleanupAfterFinish();
+    return;
+  }
+
+  // =========================
+  // Normal：单图层保存（原逻辑）
+  // =========================
   const def = FORMAT_REGISTRY[subType] ?? FORMAT_REGISTRY['默认'];
+
+  const req = validateRequiredDetailed(def, featureInfo ?? {}, groupInfo ?? {});
+  if (!req.ok) {
+    const detail = formatMissingEntries(req.missing);
+    alert(`无法保存，部分必填的附加信息为空：\n${detail}`);
+    return;
+  }
+
+  const op = editingLayerId !== null ? 'edit' : 'create';
+  const prevFeatureInfo = editingLayerId !== null
+    ? layersRef.current.find(l => l.id === editingLayerId)?.jsonInfo?.featureInfo
+    : undefined;
+
   const finalFeatureInfo = def.buildFeatureInfo({
+    op,
     mode: drawMode as DrawMode,
     coords: finalCoords,
     values: featureInfo ?? {},
     groups: groupInfo ?? {},
+    worldId: currentWorldId,
+    editorId: editorIdInput,
+    prevFeatureInfo,
+    now: new Date(),
   });
 
   const newLayerId = editingLayerId ?? nextLayerId.current++;
 
-  // 1) 先构建新的 leafletGroup（注意：不要 addTo(map)，只交给 fixedRootRef 管）
-  const newGroup = L.layerGroup();
-  const latlngs = finalCoords.map(p => proj.locationToLatLng(p.x, 64, p.z));
-
-  if (drawMode === 'point') {
-    latlngs.forEach(ll => {
-      L.circleMarker(ll, { color: drawColor, fillColor: drawColor, radius: 6 }).addTo(newGroup);
-    });
-  } else if (drawMode === 'polyline') {
-    L.polyline(latlngs, { color: drawColor }).addTo(newGroup);
-  } else if (drawMode === 'polygon') {
-    if (latlngs.length > 2) L.polygon(latlngs, { color: drawColor }).addTo(newGroup);
-    else L.polyline(latlngs, { color: drawColor }).addTo(newGroup);
-  }
+  const newGroup = makeLeafletGroup(drawMode as DrawMode, finalCoords, drawColor);
 
   const layerObj: LayerType = {
     id: newLayerId,
@@ -623,14 +1043,12 @@ const finishLayer = () => {
     },
   };
 
-  // 2) 更新 state，并且在同一个 setLayers 回调里同步 fixedRoot（避免时序错乱）
   setLayers(prev => {
     let next: LayerType[];
 
     if (editingLayerId !== null) {
       const old = prev.find(l => l.id === editingLayerId);
       if (old) fixedRootRef.current?.removeLayer(old.leafletGroup);
-
       next = prev.map(l => (l.id === editingLayerId ? layerObj : l));
     } else {
       next = [...prev, layerObj];
@@ -640,24 +1058,7 @@ const finishLayer = () => {
     return next;
   });
 
-  // 3) 清空编辑容器
-  draftGeomRef.current?.clearLayers();
-  draftEndpointRef.current?.clearLayers();
-
-  setTempPoints([]);
-  setRedoStack([]);
-  setEditingLayerId(null);
-  editingBackupCoordsRef.current = null;
-
-  setDrawing(false);
-  setDrawMode('none');
-
-
-  // 退出后统一回默认（用 hydrate 给默认值）
-  setSubType('默认');
-  const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
-  setFeatureInfo(hydrated.values ?? {});
-  setGroupInfo(hydrated.groups ?? {});
+  cleanupAfterFinish();
 };
 
 
@@ -665,16 +1066,29 @@ const finishLayer = () => {
  
  
  
- 
- 
- 
- 
- 
- 
- 
- const getLayerJSONOutput = (layer: LayerType) => {
+const getLayerJSONOutput = (layer: LayerType) => {
   return layerToJsonText(layer);
 };
+
+// 导出“图层管理区全部图层”的 JSON（外层为数组；每个条目与单层导出一致）
+const getAllLayersJSONOutput = () => {
+  const items = layers
+    .filter((l) => Boolean(l?.jsonInfo?.featureInfo))
+    .map((l) => {
+      try {
+        // 单层导出返回形如: [ { ... } ]，这里取第 1 个元素
+        const one = JSON.parse(layerToJsonText(l));
+        if (Array.isArray(one) && one.length > 0) return one[0];
+        return null;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  return JSON.stringify(items, null, 2);
+};
+
 
  
  
@@ -734,29 +1148,6 @@ const clearAllLayers = () => {
 
 
 
-
- // A) 外部强制关闭：视同“退出测绘”，并清空（不提示）
-useEffect(() => {
-  if (closeSignal === undefined) return;
-
-  setMeasuringActive(false);
-  clearAllLayers();
-
-  // 这些属于“退出测绘”语义：建议同时复位
-  setImportPanelOpen(false);
-  setDrawing(false);
-  setDrawMode('none');
-  setTempPoints([]);
-  setRedoStack([]);
-  setEditingLayerId(null);
-
-  setDrawClickSuppressed(false);
-  setShowDraftControlPointsLocked(false);
-
-}, [closeSignal]);
-
-
-
  
  
  const toggleLayerVisible = (id: number) => {
@@ -808,17 +1199,14 @@ const currentTempOutput = () => {
   const def = FORMAT_REGISTRY[subType];
   if (def?.hideTempOutput) return '';
 
-  const pts = tempPoints.map(p => `${Math.round(p.x)},${Math.round(p.z)}`);
+
+  const pts = tempPoints.map((p) => `${formatGridNumber(p.x)},${formatGridNumber(p.z)}`);
+
   if (drawMode === 'point') return `<point:${pts.join(';')}>`;
   if (drawMode === 'polyline') return `<polyline:${pts.join(';')}>`;
   return `<polygon:${pts.join(';')}>`;
 };
 
- 
- 
- 
- // 用一个 ref 记住“进入编辑时原始坐标”，避免某些时序下 tempPoints 为空导致保存丢失
- const editingBackupCoordsRef = useRef<{ x: number; z: number }[] | null>(null);
  
 const editLayer = (id: number) => {
   const layer = layers.find(l => l.id === id);
@@ -906,6 +1294,150 @@ const handleImport = () => {
     return;
   }
 
+  // ---------- 批量导入：只支持“新规范 JSON 条目”，不识别点/线/面默认文本坐标，也不识别“默认”JSON ----------
+  if (importFormat === '批量') {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      alert('批量导入只支持合法 JSON：' + e);
+      return;
+    }
+
+    const extractItems = (root: any): any[] => {
+      if (Array.isArray(root)) return root;
+
+      if (root && typeof root === 'object') {
+        if (Array.isArray((root as any).items)) return (root as any).items;
+        if (Array.isArray((root as any).features)) return (root as any).features;
+
+        // 允许：{ A:[...], B:[...], ... } —— 按对象插入顺序拼接
+        const out: any[] = [];
+        for (const v of Object.values(root)) {
+          if (Array.isArray(v)) out.push(...v);
+        }
+        if (out.length) return out;
+
+        // 单对象也允许（只导入 1 条）
+        return [root];
+      }
+
+      return [];
+    };
+
+    const items = extractItems(parsed);
+    if (!items.length) {
+      alert('批量导入失败：未找到可导入条目（需要数组或包含 items/features 的对象）。');
+      return;
+    }
+
+    const detectDefByClass = (item: any) => {
+      const cls = typeof item?.Class === 'string' ? item.Class.trim() : '';
+      if (!cls) return null;
+
+      // 1) 按 classCode 精确匹配（新规范最可靠）
+      for (const def of Object.values(FORMAT_REGISTRY)) {
+        if (def.key === '默认') continue;
+        if (def.classCode && String(def.classCode).trim() === cls) return def;
+      }
+
+      // 2) 兜底：允许 Class 直接写 FeatureKey（比如“车站/站台...”）
+      const maybeKey = cls as FeatureKey;
+      if (FORMAT_REGISTRY[maybeKey] && FORMAT_REGISTRY[maybeKey].key !== '默认') return FORMAT_REGISTRY[maybeKey];
+
+      return null;
+    };
+
+    const newLayers: LayerType[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      const def = detectDefByClass(item);
+      if (!def) {
+        errors.push(`第 ${i + 1} 条：无法识别 Class（批量模式不支持默认点/线/面结构；每条必须提供可映射的 Class）。`);
+        continue;
+      }
+
+      // 批量：严格要求 Type/Class/World 等系统字段完整且匹配当前页面世界
+      const v = validateImportItemDetailed(def, item, { worldId: currentWorldId, strictSystemFields: true });
+      if (!v.ok) {
+        const parts: string[] = [];
+        if (v.missing.length > 0) parts.push(`必填缺失/为空：\n${formatMissingEntries(v.missing)}`);
+        if (v.structuralErrors.length > 0) parts.push(`结构错误：${v.structuralErrors.join('；')}`);
+        errors.push(`${def.label} 第 ${i + 1} 条导入失败：\n${parts.join('\n')}`);
+        continue;
+      }
+
+      const mode = v.mode;
+      const coords = v.coords;
+
+      // hydrate 结果复用
+      const hydrated = v.hydrated ?? def.hydrate(item);
+
+      const featureInfoOut = def.buildFeatureInfo({
+        op: 'import',
+        mode,
+        coords,
+        values: hydrated.values ?? {},
+        groups: hydrated.groups ?? {},
+        worldId: currentWorldId,
+        prevFeatureInfo: item,
+        now: new Date(),
+      });
+
+      const itemColor = randomColor();
+      const group = L.layerGroup();
+
+      const yForDisplay =
+        Number.isFinite(Number(item?.height)) ? Number(item.height)
+        : Number.isFinite(Number(item?.heightH)) ? Number(item.heightH)
+        : 64;
+
+      const latlngs = coords.map(p => proj.locationToLatLng(p.x, yForDisplay, p.z));
+
+      if (mode === 'point') {
+        latlngs.forEach(ll => {
+          L.circleMarker(ll, { color: itemColor, fillColor: itemColor, radius: 6 }).addTo(group);
+        });
+      } else if (mode === 'polyline') {
+        L.polyline(latlngs, { color: itemColor }).addTo(group);
+      } else {
+        L.polygon(latlngs, { color: itemColor }).addTo(group);
+      }
+
+      const id = nextLayerId.current++;
+      newLayers.push({
+        id,
+        mode,
+        color: itemColor,
+        coords,
+        visible: true,
+        leafletGroup: group,
+        jsonInfo: {
+          subType: def.key,
+          featureInfo: featureInfoOut,
+        },
+      });
+    }
+
+    if (errors.length) {
+      alert(`批量导入部分失败：\n\n${errors.slice(0, 10).join('\n\n')}${errors.length > 10 ? `\n\n...(共 ${errors.length} 条错误)` : ''}`);
+      return;
+    }
+
+    setLayers(prev => {
+      const next = [...prev, ...newLayers];
+      syncFixedRoot(next, editingLayerId);
+      return next;
+    });
+
+    setImportText('');
+    setImportPanelOpen(false);
+    return;
+  }
+
   const color = randomColor();
 
   // ========== 1) 点 / 线 / 面（文本坐标） ==========
@@ -948,10 +1480,13 @@ const handleImport = () => {
 
     const def = FORMAT_REGISTRY['默认'];
     const featureInfoOut = def.buildFeatureInfo({
+      op: 'import',
       mode,
       coords,
       values: {},
       groups: {},
+      worldId: currentWorldId,
+      now: new Date(),
     });
 
     const id = nextLayerId.current++;
@@ -979,7 +1514,7 @@ const handleImport = () => {
     return;
   }
 
-  // ========== 2) JSON ==========
+  // ========== 2) JSON（单类型：按 importFormat 指定 FeatureKey）==========
   let parsed: any;
   try {
     parsed = JSON.parse(text);
@@ -1006,34 +1541,28 @@ const handleImport = () => {
     const item = parsed[i];
     const itemColor = randomColor();
 
-    const err = def.validateImportItem?.(item);
-    if (err) {
-      alert(`${def.label} 第 ${i + 1} 项不合法：${err}`);
+    const v = validateImportItemDetailed(def, item, { worldId: currentWorldId, strictSystemFields: true });
+    if (!v.ok) {
+      const parts: string[] = [];
+      if (v.missing.length > 0) parts.push(`无法导入，部分必填的附加信息为空：\n${formatMissingEntries(v.missing)}`);
+      if (v.structuralErrors.length > 0) parts.push(`结构错误：${v.structuralErrors.join('；')}`);
+      alert(`${def.label} 第 ${i + 1} 项导入失败：\n${parts.join('\n')}`);
       return;
     }
 
-    const mode = def.modes[0];
-    const coords = def.coordsFromFeatureInfo(item);
+    const mode = v.mode;
+    const coords = v.coords;
+    const hydrated = v.hydrated ?? def.hydrate(item);
 
-    if (mode === 'point' && coords.length !== 1) {
-      alert(`${def.label} 第 ${i + 1} 项：点模式坐标必须为 1 个点`);
-      return;
-    }
-    if (mode === 'polyline' && coords.length < 2) {
-      alert(`${def.label} 第 ${i + 1} 项：线模式至少 2 个点`);
-      return;
-    }
-    if (mode === 'polygon' && coords.length < 3) {
-      alert(`${def.label} 第 ${i + 1} 项：面模式至少 3 个点`);
-      return;
-    }
-
-    const hydrated = def.hydrate(item);
     const featureInfoOut = def.buildFeatureInfo({
+      op: 'import',
       mode,
       coords,
       values: hydrated.values ?? {},
       groups: hydrated.groups ?? {},
+      worldId: currentWorldId,
+      prevFeatureInfo: item,
+      now: new Date(),
     });
 
     const group = L.layerGroup();
@@ -1079,6 +1608,8 @@ const handleImport = () => {
   setImportText('');
   setImportPanelOpen(false);
 };
+
+
 
  const subTypeOptions =
   drawMode === 'none'
@@ -1170,6 +1701,10 @@ const renderField = (field: any, value: any, onChange: (v: any) => void) => {
 const makeEmptyItem = (fields: any[]) => {
   const obj: Record<string, any> = {};
   for (const f of fields) {
+    if (f.defaultValue !== undefined) {
+      obj[f.key] = f.defaultValue;
+      continue;
+    }
     if (f.type === 'select') obj[f.key] = f.options?.[0]?.value ?? '';
     else if (f.type === 'bool') obj[f.key] = false;
     else obj[f.key] = '';
@@ -1181,12 +1716,11 @@ const renderDynamicExtraInfo = () => {
   const hasFields = Array.isArray(activeDef?.fields) && activeDef.fields.length > 0;
   const hasGroups = Array.isArray(activeDef?.groups) && activeDef.groups.length > 0;
 
-  if (!hasFields && !hasGroups) {
-    return <div className="text-xs text-gray-500 mt-2">该类型无附加字段</div>;
-  }
-
   return (
     <div className="mt-2">
+      {!hasFields && !hasGroups && (
+        <div className="text-xs text-gray-500">该类型无附加字段</div>
+      )}
       {hasFields && (
         <div className="mb-3">
           {activeDef.fields.map((f: any) =>
@@ -1254,6 +1788,23 @@ const renderDynamicExtraInfo = () => {
           })}
         </div>
       )}
+
+      {/* 编辑者ID：用于系统字段 CreateBy/ModifityBy 的自动写入 */}
+      {subType !== '默认' && (
+        <div className="mt-3 border-t pt-2">
+          <label className="block text-xs font-semibold mb-1">编辑者ID</label>
+          <input
+            type="text"
+            className="w-full border p-1 rounded"
+            placeholder="可选：用于写入 CreateBy / ModifityBy"
+            value={editorIdInput}
+            onChange={(e) => setEditorIdInput(e.target.value)}
+          />
+          <div className="text-[11px] text-gray-500 mt-1">
+            初次绘制完成时（非空）写入 CreateBy；编辑保存时（非空）写入 ModifityBy。
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1283,6 +1834,59 @@ useEffect(() => {
   mq.addEventListener('change', sync);
   return () => mq.removeEventListener('change', sync);
 }, []);
+
+const resetFeatureFormToDefault = () => {
+  setSubType('默认');
+  const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
+  setFeatureInfo(hydrated.values ?? {});
+  setGroupInfo(hydrated.groups ?? {});
+};
+
+const handleDrawModeButtonClick = (m: 'point' | 'polyline' | 'polygon') => {
+  requestSwitchWithExtraWarn(() => {
+    const sameMode = drawMode === m;
+
+    // 二次点击同一模式：关闭回到 none
+    if (sameMode) {
+      // 只要会清空草稿/临时点，就做二次确认（与你“和 .5/.0 类似”的交互一致）
+      if (tempPoints.length > 0) {
+        if (!confirm('取消当前模式将清空当前临时图形？')) return;
+      }
+
+      // 统一清理草稿（避免端点/控制点残留）
+      clearDraftOverlays();
+      setTempPoints([]);
+      setRedoStack([]);
+
+      resetSpecialDrafts();
+
+      setDrawMode('none');
+      setDrawing(false);
+
+      resetFeatureFormToDefault();
+      return;
+    }
+
+    // 切换到另一模式
+    if (tempPoints.length > 0 && drawMode !== 'none') {
+      if (!confirm('切换模式将清空当前临时图形？')) return;
+
+      // 统一清理草稿（避免端点/控制点残留）
+      clearDraftOverlays();
+      setTempPoints([]);
+      setRedoStack([]);
+    } else {
+      // 即便没有 tempPoints，切换模式也应清理“最新端点指示”
+      draftEndpointRef.current?.clearLayers();
+    }
+    resetSpecialDrafts();
+
+    setDrawMode(m);
+    setDrawing(true);
+
+    resetFeatureFormToDefault();
+  });
+};
 
 
 
@@ -1375,41 +1979,18 @@ return (
               <div className="p-3 overflow-y-auto max-h-[calc(70vh-48px)]">
                 {/* 点/线/面 */}
                 <div className="flex gap-2 mb-2">
-                  {(['point', 'polyline', 'polygon'] as const).map((m) => (
-                    <button
-                      key={m}
-                      className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
-onClick={() => {
-  requestSwitchWithExtraWarn(() => {
-    if (tempPoints.length > 0 && drawMode !== m) {
-      if (!confirm('切换模式将清空当前临时图形？')) return;
+  {(['point', 'polyline', 'polygon'] as const).map((m) => (
+    <button
+      key={m}
+      className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
+      onClick={() => handleDrawModeButtonClick(m)}
+      type="button"
+    >
+      {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
+    </button>
+  ))}
+</div>
 
-      // 统一清理草稿（避免端点/控制点残留）
-      clearDraftOverlays();
-      setTempPoints([]);
-      setRedoStack([]);
-    } else {
-      // 即便没有 tempPoints，切换模式也应清理“最新端点指示”
-      draftEndpointRef.current?.clearLayers();
-    }
-
-    setDrawMode(m);
-    setDrawing(true);
-
-    setSubType('默认');
-    const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
-    setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
-  });
-}}
-
-
-                      type="button"
-                    >
-                      {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
-                    </button>
-                  ))}
-                </div>
 
                 {/* 要素类型下拉 */}
                 {drawMode !== 'none' && (
@@ -1421,13 +2002,17 @@ onChange={(e) => {
   const next = e.target.value as FeatureKey;
 
   requestSwitchWithExtraWarn(() => {
-    setSubType(next);
+    requestExitSpecialDraftIfNeeded(() => {
+      resetSpecialDrafts();
 
-    const hydrated = FORMAT_REGISTRY[next].hydrate({});
-    setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
+      setSubType(next);
+      const hydrated = FORMAT_REGISTRY[next].hydrate({});
+      setFeatureInfo(hydrated.values ?? {});
+      setGroupInfo(hydrated.groups ?? {});
+    });
   });
 }}
+
                       className="w-full border p-1 rounded"
                     >
                       <option value="默认">默认</option>
@@ -1507,6 +2092,17 @@ onChange={(e) => {
   )}
 </div>
 
+{/* 坐标网格模式（点击创建点后立刻生效，可随时切换） */}
+<div className="mb-2">
+  <GridSnapModeSwitch />
+</div>
+
+{/* 手动输入：不经过网格化再修正，仅允许整数或 .5 */}
+<ManualPointInput
+  enabled={measuringActive && drawing && drawMode !== 'none' && !showDraftControlPointsLocked}
+  defaultY={-64}
+  onSubmit={onManualPointSubmit}
+/>
 
 
 {/* 辅助线 */}
@@ -1584,12 +2180,112 @@ onChange={(e) => {
 
 
                 {/* JSON 输入区 */}
-                {subType !== '默认' && (
-                  <div className="mb-2 border-t pt-2">
-                    <label className="text-sm font-bold">附加信息 ({FORMAT_REGISTRY[subType].label})</label>
-                    {renderDynamicExtraInfo()}
-                  </div>
-                )}
+{subType !== '默认' && (
+  <div className="mb-2 border-t pt-2">
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-sm font-bold">
+        附加信息 (
+        {specialDraftMode === 'merge-point-platform-station'
+          ? '多点合一-站台车站'
+          : specialDraftMode === 'merge-polygon-outline-building'
+          ? '多面合一-站台建筑与轮廓'
+          : FORMAT_REGISTRY[subType].label}
+        )
+      </label>
+
+      <div className="flex items-center gap-2">
+        {/* 点：站台 -> 多点合一 */}
+        {drawMode === 'point' && subType === '站台' && (
+          <button
+            type="button"
+            className={`px-2 py-1 text-xs rounded border ${
+              specialDraftMode === 'merge-point-platform-station'
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={() => {
+              requestSwitchWithExtraWarn(() => {
+                if (specialDraftMode === 'merge-point-platform-station') {
+                  requestExitSpecialDraftIfNeeded(() => resetSpecialDrafts());
+                } else {
+                  // 进入多点合一：初始化草稿
+                  setSpecialDraftMode('merge-point-platform-station');
+                  setMergePointPSDraft({ platforms: [], station: null });
+                }
+              });
+            }}
+          >
+            多点合一
+          </button>
+        )}
+
+        {/* 线：铁路 -> 方向反转（>=2 控制点） */}
+        {drawMode === 'polyline' && subType === '铁路' && (
+          <RailwayDirectionReverseButton
+            enabled={tempPoints.length >= 2 && !drawClickSuppressed}
+            onReverse={() => {
+              if (tempPoints.length < 2) return;
+
+              // 反转控制点
+              const reversed = [...tempPoints].reverse();
+              setTempPoints(reversed);
+              drawDraftGeometry(reversed, 'polyline', drawColor);
+
+              // 调转起止站台字段（若存在）
+              setFeatureInfo((prev: any) => {
+                const start = prev?.startplf;
+                const end = prev?.endplf;
+                return { ...(prev ?? {}), startplf: end ?? '', endplf: start ?? '' };
+              });
+            }}
+          />
+        )}
+
+        {/* 面：站台轮廓/车站建筑 -> 多面合一 */}
+        {drawMode === 'polygon' && (String(subType) === '站台轮廓' || subType === '车站建筑') && (
+          <button
+            type="button"
+            className={`px-2 py-1 text-xs rounded border ${
+              specialDraftMode === 'merge-polygon-outline-building'
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={() => {
+              requestSwitchWithExtraWarn(() => {
+                if (specialDraftMode === 'merge-polygon-outline-building') {
+                  requestExitSpecialDraftIfNeeded(() => resetSpecialDrafts());
+                } else {
+                  setSpecialDraftMode('merge-polygon-outline-building');
+                  setMergePolygonOBDraft({ outline: null, building: null });
+                }
+              });
+            }}
+          >
+            多面合一
+          </button>
+        )}
+      </div>
+    </div>
+
+    {/* 内容：按 special 模式切换渲染 */}
+    {specialDraftMode === 'merge-point-platform-station' ? (
+      <MergePointPlatformStation
+        draft={mergePointPSDraft}
+        onChange={setMergePointPSDraft}
+      />
+    ) : specialDraftMode === 'merge-polygon-outline-building' ? (
+      <MergePolygonOutlineBuilding
+        draft={mergePolygonOBDraft}
+        onChange={setMergePolygonOBDraft}
+        outlineKey="站台轮廓"
+        buildingKey="车站建筑"
+      />
+    ) : (
+      renderDynamicExtraInfo()
+    )}
+  </div>
+)}
+
               </div>
             </div>
           </DraggablePanel>
@@ -1614,41 +2310,18 @@ onChange={(e) => {
 
             <div className="p-3 overflow-y-auto max-h-[calc(70vh-48px)]">
               <div className="flex gap-2 mb-2">
-                {(['point', 'polyline', 'polygon'] as const).map((m) => (
-                  <button
-                    key={m}
-                    className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
-onClick={() => {
-  requestSwitchWithExtraWarn(() => {
-    if (tempPoints.length > 0 && drawMode !== m) {
-      if (!confirm('切换模式将清空当前临时图形？')) return;
+  {(['point', 'polyline', 'polygon'] as const).map((m) => (
+    <button
+      key={m}
+      className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
+      onClick={() => handleDrawModeButtonClick(m)}
+      type="button"
+    >
+      {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
+    </button>
+  ))}
+</div>
 
-      // 统一清理草稿（避免端点/控制点残留）
-      clearDraftOverlays();
-      setTempPoints([]);
-      setRedoStack([]);
-    } else {
-      // 即便没有 tempPoints，切换模式也应清理“最新端点指示”
-      draftEndpointRef.current?.clearLayers();
-    }
-
-    setDrawMode(m);
-    setDrawing(true);
-
-    setSubType('默认');
-    const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
-    setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
-  });
-}}
-
-
-                    type="button"
-                  >
-                    {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
-                  </button>
-                ))}
-              </div>
 
               {drawMode !== 'none' && (
                 <div className="mb-2">
@@ -1771,12 +2444,112 @@ onChange={(e) => {
 )}
 
 
-              {subType !== '默认' && (
-                <div className="mb-2 border-t pt-2">
-                  <label className="text-sm font-bold">附加信息 ({FORMAT_REGISTRY[subType].label})</label>
-                  {renderDynamicExtraInfo()}
-                </div>
-              )}
+{subType !== '默认' && (
+  <div className="mb-2 border-t pt-2">
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-sm font-bold">
+        附加信息 (
+        {specialDraftMode === 'merge-point-platform-station'
+          ? '多点合一-站台车站'
+          : specialDraftMode === 'merge-polygon-outline-building'
+          ? '多面合一-站台建筑与轮廓'
+          : FORMAT_REGISTRY[subType].label}
+        )
+      </label>
+
+      <div className="flex items-center gap-2">
+        {/* 点：站台 -> 多点合一 */}
+        {drawMode === 'point' && subType === '站台' && (
+          <button
+            type="button"
+            className={`px-2 py-1 text-xs rounded border ${
+              specialDraftMode === 'merge-point-platform-station'
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={() => {
+              requestSwitchWithExtraWarn(() => {
+                if (specialDraftMode === 'merge-point-platform-station') {
+                  requestExitSpecialDraftIfNeeded(() => resetSpecialDrafts());
+                } else {
+                  // 进入多点合一：初始化草稿
+                  setSpecialDraftMode('merge-point-platform-station');
+                  setMergePointPSDraft({ platforms: [], station: null });
+                }
+              });
+            }}
+          >
+            多点合一
+          </button>
+        )}
+
+        {/* 线：铁路 -> 方向反转（>=2 控制点） */}
+        {drawMode === 'polyline' && subType === '铁路' && (
+          <RailwayDirectionReverseButton
+            enabled={tempPoints.length >= 2 && !drawClickSuppressed}
+            onReverse={() => {
+              if (tempPoints.length < 2) return;
+
+              // 反转控制点
+              const reversed = [...tempPoints].reverse();
+              setTempPoints(reversed);
+              drawDraftGeometry(reversed, 'polyline', drawColor);
+
+              // 调转起止站台字段（若存在）
+              setFeatureInfo((prev: any) => {
+                const start = prev?.startplf;
+                const end = prev?.endplf;
+                return { ...(prev ?? {}), startplf: end ?? '', endplf: start ?? '' };
+              });
+            }}
+          />
+        )}
+
+        {/* 面：站台轮廓/车站建筑 -> 多面合一 */}
+        {drawMode === 'polygon' && (String(subType) === '站台轮廓' || subType === '车站建筑') && (
+          <button
+            type="button"
+            className={`px-2 py-1 text-xs rounded border ${
+              specialDraftMode === 'merge-polygon-outline-building'
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={() => {
+              requestSwitchWithExtraWarn(() => {
+                if (specialDraftMode === 'merge-polygon-outline-building') {
+                  requestExitSpecialDraftIfNeeded(() => resetSpecialDrafts());
+                } else {
+                  setSpecialDraftMode('merge-polygon-outline-building');
+                  setMergePolygonOBDraft({ outline: null, building: null });
+                }
+              });
+            }}
+          >
+            多面合一
+          </button>
+        )}
+      </div>
+    </div>
+
+    {/* 内容：按 special 模式切换渲染 */}
+    {specialDraftMode === 'merge-point-platform-station' ? (
+      <MergePointPlatformStation
+        draft={mergePointPSDraft}
+        onChange={setMergePointPSDraft}
+      />
+    ) : specialDraftMode === 'merge-polygon-outline-building' ? (
+      <MergePolygonOutlineBuilding
+        draft={mergePolygonOBDraft}
+        onChange={setMergePolygonOBDraft}
+        outlineKey="站台轮廓"
+        buildingKey="车站建筑"
+      />
+    ) : (
+      renderDynamicExtraInfo()
+    )}
+  </div>
+)}
+
             </div>
           </div>
         </div>
@@ -1808,13 +2581,17 @@ onChange={(e) => {
                   onChange={(e) => setImportFormat(e.target.value as ImportFormat)}
                   className="w-full border p-2 rounded"
                 >
-                  <option value="点">点</option>
-                  <option value="线">线</option>
-                  <option value="面">面</option>
-                  <option value="车站">车站</option>
-                  <option value="铁路">铁路</option>
-                  <option value="站台">站台</option>
-                  <option value="车站建筑">车站建筑</option>
+<option value="点">点</option>
+<option value="线">线</option>
+<option value="面">面</option>
+<option value="批量">批量</option>
+<option value="车站">车站</option>
+<option value="铁路">铁路</option>
+<option value="站台">站台</option>
+<option value="站台轮廓">站台轮廓</option>
+<option value="车站建筑">车站建筑</option>
+<option value="车站建筑点">车站建筑点</option>
+<option value="车站建筑楼层">车站建筑楼层</option>
                 </select>
 
                 <label className="block text-sm font-bold mb-1">数据输入</label>
@@ -1822,11 +2599,13 @@ onChange={(e) => {
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                   className="w-full border rounded p-2 text-sm"
-                  placeholder={
-                    importFormat === '点' || importFormat === '线' || importFormat === '面'
-                      ? 'x,z;x,z;x,z...'
-                      : '符合 JSON 格式，如数组'
-                  }
+placeholder={
+  importFormat === '点' || importFormat === '线' || importFormat === '面'
+    ? '坐标文本：x,z;x,z 或 x,y,z;x,y,z'
+    : importFormat === '批量'
+      ? '批量 JSON：支持数组或 {items:[...]} / {features:[...]}。每条必须是“新规范 JSON”(含 Type/Class/World)，且 Class 必须可映射到已支持格式。'
+      : '单类型 JSON：数组，每条为该格式的 featureInfo 对象'
+}
                   rows={6}
                 />
 
@@ -1862,13 +2641,17 @@ onChange={(e) => {
                 onChange={(e) => setImportFormat(e.target.value as ImportFormat)}
                 className="w-full border p-2 rounded"
               >
-                <option value="点">点</option>
-                <option value="线">线</option>
-                <option value="面">面</option>
-                <option value="车站">车站</option>
-                <option value="铁路">铁路</option>
-                <option value="站台">站台</option>
-                <option value="车站建筑">车站建筑</option>
+<option value="点">点</option>
+<option value="线">线</option>
+<option value="面">面</option>
+<option value="批量">批量</option>
+<option value="车站">车站</option>
+<option value="铁路">铁路</option>
+<option value="站台">站台</option>
+<option value="站台轮廓">站台轮廓</option>
+<option value="车站建筑">车站建筑</option>
+<option value="车站建筑点">车站建筑点</option>
+<option value="车站建筑楼层">车站建筑楼层</option>
               </select>
 
               <label className="block text-sm font-bold mb-1">数据输入</label>
@@ -1887,71 +2670,102 @@ onChange={(e) => {
         </div>
       )}
 
-{/* ======== 图层控制器（位置保持原样，可不做标题栏/拖拽） ======== */}
+{/* ======== 图层控制器 ======== */}
 {measuringActive && (
   <div className="fixed top-20 right-4 bg-white p-3 rounded-lg shadow-lg z-[1000] w-85 max-h-[70vh] overflow-y-auto">
-    <h3 className="font-bold mb-2">测绘图层</h3>
-
     {(() => {
       const busy = (drawing && drawMode !== 'none') || editingLayerId !== null;
       const visibleList = layers.filter((l) => l.id !== editingLayerId); // 编辑中的层在列表隐藏
 
-      return visibleList.map((l) => (
-        <div key={l.id} className="flex items-center gap-1 mb-1">
-          <button
-            className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
-            onClick={() => toggleLayerVisible(l.id)}
-            type="button"
-          >
-            {l.visible ? '隐藏' : '显示'}
-          </button>
+      return (
+        <>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold">测绘图层</h3>
 
-          <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
-            ↑
-          </button>
-
-          <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
-            ↓
-          </button>
-
-          <button
-            className={`px-2 py-1 text-sm ${
-              busy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
-            }`}
-            disabled={busy}
-            onClick={() => {
-              if (busy) return;
-              editLayer(l.id);
-            }}
-            type="button"
-            title={busy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
-          >
-            编辑
-          </button>
-
-          <button className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
-            删除
-          </button>
-
-          <button
-            className="px-3 py-1 text-sm bg-purple-400 text-white"
-            onClick={() => {
-              setJsonPanelText(getLayerJSONOutput(l));
-              setJsonPanelOpen(true);
-            }}
-            type="button"
-          >
-            JSON
-          </button>
-
-          <div className="flex-1 text-sm truncate">
-            #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
+            <button
+              type="button"
+              className={`px-2 py-1 text-sm rounded border ${
+                busy || visibleList.length === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
+                  : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
+              }`}
+              title={
+                busy
+                  ? '当前有要素正在编辑/绘制，无法整体导出'
+                  : visibleList.length === 0
+                    ? '暂无图层'
+                    : '导出图层管理区全部图层 JSON'
+              }
+              disabled={busy || visibleList.length === 0}
+              onClick={() => {
+                if (busy || visibleList.length === 0) return;
+                setJsonPanelText(getAllLayersJSONOutput());
+                setJsonPanelOpen(true);
+              }}
+            >
+              整体JSON
+            </button>
           </div>
-        </div>
-      ));
+
+          {visibleList.map((l) => (
+            <div key={l.id} className="flex items-center gap-1 mb-1">
+              <button
+                className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
+                onClick={() => toggleLayerVisible(l.id)}
+                type="button"
+              >
+                {l.visible ? '隐藏' : '显示'}
+              </button>
+
+              <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
+                ↑
+              </button>
+
+              <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
+                ↓
+              </button>
+
+              <button
+                className={`px-2 py-1 text-sm ${
+                  busy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
+                }`}
+                disabled={busy}
+                onClick={() => {
+                  if (busy) return;
+                  editLayer(l.id);
+                }}
+                type="button"
+                title={busy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
+              >
+                编辑
+              </button>
+
+              <button className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
+                删除
+              </button>
+
+              <button
+                className="px-3 py-1 text-sm bg-purple-400 text-white"
+                onClick={() => {
+                  setJsonPanelText(getLayerJSONOutput(l));
+                  setJsonPanelOpen(true);
+                }}
+                type="button"
+              >
+                JSON
+              </button>
+
+              <div className="flex-1 text-sm truncate">
+                #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
+              </div>
+            </div>
+          ))}
+        </>
+      );
     })()}
   </div>
 )}
+
 
       {/* ======== JSON 导出窗口（替代 alert/print） ======== */}
 {measuringActive && jsonPanelOpen && (
@@ -2040,6 +2854,33 @@ onChange={(e) => {
           onClick={confirmExtraSwitch}
         >
           确定
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{endMeasuringWarnOpen && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+    <div className="w-[420px] max-w-[90vw] rounded-lg bg-white shadow-lg border">
+      <div className="px-4 py-3 border-b font-bold text-sm">结束测绘确认</div>
+      <div className="px-4 py-3 text-sm text-gray-800">
+        结束测绘将清除所有测绘图层，是否确认？
+      </div>
+      <div className="px-4 py-3 border-t flex justify-end gap-2">
+        <button
+          type="button"
+          className="px-3 py-1.5 rounded border bg-white text-gray-800 hover:bg-gray-50"
+          onClick={cancelEndMeasuring}
+        >
+          返回
+        </button>
+        <button
+          type="button"
+          className="px-3 py-1.5 rounded border bg-blue-600 text-white border-blue-700 hover:bg-blue-700"
+          onClick={confirmEndMeasuring}
+        >
+          确认
         </button>
       </div>
     </div>

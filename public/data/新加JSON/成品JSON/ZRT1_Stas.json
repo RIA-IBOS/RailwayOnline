@@ -1,0 +1,2100 @@
+[
+  {
+    "LineID": "ZRT1_01A",
+    "LineName": "溯铁1号线山内段",
+    "bureau": "T",
+    "line": "1",
+    "color": "ED1C24",
+    "direction": 3,
+    "startplf": "北城外",
+    "endplf": "溯东",
+    "PLpoints": [
+      [
+        4987.5,
+        -64,
+        4783.5
+      ],
+      [
+        4987.5,
+        65,
+        4835.5
+      ],
+      [
+        4989.5,
+        65,
+        4840.5
+      ],
+      [
+        4991.5,
+        65,
+        4842.5
+      ],
+      [
+        4996.5,
+        65,
+        4844.5
+      ],
+      [
+        5006.5,
+        64,
+        4844.5
+      ],
+      [
+        5010.5,
+        64,
+        4846.5
+      ],
+      [
+        5012.5,
+        64,
+        4848.5
+      ],
+      [
+        5014.5,
+        64,
+        4852.5
+      ],
+      [
+        5014.5,
+        64,
+        4893.5
+      ],
+      [
+        5016.5,
+        64,
+        4898.5
+      ],
+      [
+        5018.5,
+        64,
+        4900.5
+      ],
+      [
+        5023.5,
+        64,
+        4902.5
+      ],
+      [
+        5043.5,
+        66,
+        4902.5
+      ],
+      [
+        5049.5,
+        66,
+        4904.5
+      ],
+      [
+        5051.5,
+        67,
+        4906.5
+      ],
+      [
+        5053.5,
+        67,
+        4912.5
+      ],
+      [
+        5053.5,
+        69,
+        4962.5
+      ],
+      [
+        5053.5,
+        69,
+        4967.5
+      ],
+      [
+        5056.5,
+        69,
+        4975.5
+      ],
+      [
+        5059.5,
+        69,
+        4978.5
+      ],
+      [
+        5067.5,
+        69,
+        4981.5
+      ],
+      [
+        5093.5,
+        69,
+        4981.5
+      ],
+      [
+        5103.5,
+        67,
+        4981.5
+      ],
+      [
+        5147.5,
+        67,
+        4981.5
+      ],
+      [
+        5153.5,
+        67,
+        4978.5
+      ],
+      [
+        5156.5,
+        67,
+        4975.5
+      ],
+      [
+        5159.5,
+        67,
+        4969.5
+      ],
+      [
+        5159.5,
+        67,
+        4909.5
+      ],
+      [
+        5162.5,
+        67,
+        4902.5
+      ],
+      [
+        5165.5,
+        67,
+        4899.5
+      ],
+      [
+        5172.5,
+        67,
+        4896.5
+      ],
+      [
+        5468.5,
+        68,
+        4896.5
+      ]
+    ],
+    "Type": "Polyline",
+    "Class": "RLE",
+    "World": 0,
+    "CreateTime": "20251223",
+    "CreateBy": "639"
+  },
+  {
+    "LineID": "ZRT1_01B",
+    "LineName": "溯铁1号线白霖段",
+    "bureau": "T",
+    "line": "1",
+    "color": "ED1C24",
+    "direction": 3,
+    "startplf": "海原",
+    "endplf": "北城外",
+    "PLpoints": [
+      [
+        4760.5,
+        -64,
+        4089.5
+      ],
+      [
+        4760.5,
+        -64,
+        4367
+      ],
+      [
+        4760.5,
+        -64,
+        4372.5
+      ],
+      [
+        4762.5,
+        -64,
+        4378.5
+      ],
+      [
+        4766.5,
+        -64,
+        4382.5
+      ],
+      [
+        4773,
+        -64,
+        4385.5
+      ],
+      [
+        4866.5,
+        -64,
+        4385.5
+      ],
+      [
+        4873,
+        -64,
+        4388
+      ],
+      [
+        4876.5,
+        -64,
+        4391
+      ],
+      [
+        4879.5,
+        -64,
+        4396.5
+      ],
+      [
+        4879.5,
+        -64,
+        4609.5
+      ],
+      [
+        4882.5,
+        -64,
+        4618
+      ],
+      [
+        4884.5,
+        -64,
+        4621.5
+      ],
+      [
+        4893.5,
+        -64,
+        4624.5
+      ],
+      [
+        4974.5,
+        -64,
+        4624.5
+      ],
+      [
+        4981,
+        -64,
+        4627
+      ],
+      [
+        4984,
+        -64,
+        4629.5
+      ],
+      [
+        4987.5,
+        -64,
+        4636
+      ],
+      [
+        4987.5,
+        -64,
+        4783.5
+      ]
+    ],
+    "Type": "Polyline",
+    "Class": "RLE",
+    "World": 0,
+    "CreateTime": "20251223",
+    "CreateBy": "639"
+  },
+  {
+    "LineID": "ZRT1_01C",
+    "LineName": "溯铁1号线北延段",
+    "bureau": "T",
+    "line": "1",
+    "color": "ED1C24",
+    "direction": 3,
+    "startplf": "海原",
+    "endplf": "黄与红",
+    "PLpoints": [
+      [
+        1031.5,
+        -64,
+        2746.5
+      ],
+      [
+        1031.5,
+        -64,
+        3076.5
+      ],
+      [
+        1032.5,
+        -64,
+        3081.5
+      ],
+      [
+        1033.5,
+        -64,
+        3085.5
+      ],
+      [
+        1035.5,
+        -64,
+        3091.5
+      ],
+      [
+        1038.5,
+        -64,
+        3097.5
+      ],
+      [
+        1044.5,
+        -64,
+        3105.5
+      ],
+      [
+        1047.5,
+        -64,
+        3108.5
+      ],
+      [
+        1055.5,
+        -64,
+        3114.5
+      ],
+      [
+        1061.5,
+        -64,
+        3117.5
+      ],
+      [
+        1067.5,
+        -64,
+        3119.5
+      ],
+      [
+        1075.5,
+        -64,
+        3121.5
+      ],
+      [
+        4387.5,
+        -64,
+        3121.5
+      ],
+      [
+        4392.5,
+        -64,
+        3121.5
+      ],
+      [
+        4400.5,
+        -64,
+        3123.5
+      ],
+      [
+        4406.5,
+        -64,
+        3125.5
+      ],
+      [
+        4412.5,
+        -64,
+        3128.5
+      ],
+      [
+        4420.5,
+        -64,
+        3134.5
+      ],
+      [
+        4423.5,
+        -64,
+        3137.5
+      ],
+      [
+        4429.5,
+        -64,
+        3145.5
+      ],
+      [
+        4432.5,
+        -64,
+        3151.5
+      ],
+      [
+        4434.5,
+        -64,
+        3157.5
+      ],
+      [
+        4436.5,
+        -64,
+        3166.5
+      ],
+      [
+        4436.5,
+        -64,
+        3834.5
+      ],
+      [
+        4436.5,
+        -64,
+        3839.5
+      ],
+      [
+        4437.5,
+        -64,
+        3844.5
+      ],
+      [
+        4438.5,
+        -64,
+        3848.5
+      ],
+      [
+        4440.5,
+        -64,
+        3854.5
+      ],
+      [
+        4443.5,
+        -64,
+        3860.5
+      ],
+      [
+        4449.5,
+        -64,
+        3868.5
+      ],
+      [
+        4460.5,
+        -64,
+        3877.5
+      ],
+      [
+        4466.5,
+        -64,
+        3880.5
+      ],
+      [
+        4472.5,
+        -64,
+        3882.5
+      ],
+      [
+        4480.5,
+        -64,
+        3884.5
+      ],
+      [
+        4712.5,
+        -64,
+        3884.5
+      ],
+      [
+        4716.5,
+        -64,
+        3884.5
+      ],
+      [
+        4724.5,
+        -64,
+        3886.5
+      ],
+      [
+        4730.5,
+        -64,
+        3888.5
+      ],
+      [
+        4736.5,
+        -64,
+        3891.5
+      ],
+      [
+        4744.5,
+        -64,
+        3897.5
+      ],
+      [
+        4747.5,
+        -64,
+        3900.5
+      ],
+      [
+        4753.5,
+        -64,
+        3908.5
+      ],
+      [
+        4756.5,
+        -64,
+        3914.5
+      ],
+      [
+        4758.5,
+        -64,
+        3920.5
+      ],
+      [
+        4759.5,
+        -64,
+        3924.5
+      ],
+      [
+        4760.5,
+        -64,
+        3929.5
+      ],
+      [
+        4760.5,
+        -64,
+        4090.5
+      ]
+    ],
+    "Type": "Polyline",
+    "Class": "RLE",
+    "World": 0,
+    "CreateTime": "20251223",
+    "CreateBy": "639"
+  },
+  {
+    "LineID": "ZRT1_01D",
+    "LineName": "溯铁1号线湾东段",
+    "bureau": "T",
+    "line": "1",
+    "color": "ED1C24",
+    "direction": 3,
+    "startplf": "溯东",
+    "endplf": "幽南高架东",
+    "PLpoints": [
+      [
+        5468.5,
+        -64,
+        4896.5
+      ],
+      [
+        5982.5,
+        -64,
+        4896.5
+      ]
+    ],
+    "Type": "Polyline",
+    "Class": "RLE",
+    "World": 0,
+    "CreateTime": "20251223",
+    "CreateBy": "639"
+  },
+  {
+    "platformID": "ZRT1PLF_01_D",
+    "platformName": "黄与红站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 1031.5,
+      "z": 2746.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251224"
+  },
+  {
+    "platformID": "ZRT1PLF_01_U",
+    "platformName": "黄与红站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 1031.5,
+      "z": 2746.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251224"
+  },
+  {
+    "stationID": "ZRT1STA_01",
+    "stationName": "黄与红站",
+    "coordinate": {
+      "x": 1031.5,
+      "z": 2746.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_01_D"
+      },
+      {
+        "ID": "ZRT1PLF_01_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251224"
+  },
+  {
+    "platformID": "ZRT1PLF_02_D",
+    "platformName": "林前站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 1505.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251224"
+  },
+  {
+    "platformID": "ZRT1PLF_02_U",
+    "platformName": "林前站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 1505.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251224"
+  },
+  {
+    "stationID": "ZRT1STA_02",
+    "stationName": "林前站",
+    "coordinate": {
+      "x": 1505.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_02_D"
+      },
+      {
+        "ID": "ZRT1PLF_02_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251224"
+  },
+  {
+    "platformID": "ZRT1PLF_03_D",
+    "platformName": "峡西站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 2030.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_03_U",
+    "platformName": "峡西站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 2030.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_03",
+    "stationName": "峡西站",
+    "coordinate": {
+      "x": 2030.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_03_D"
+      },
+      {
+        "ID": "ZRT1PLF_03_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_04_D",
+    "platformName": "西屿站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 2675.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_04_U",
+    "platformName": "西屿站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 2675.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_04",
+    "stationName": "西屿站",
+    "coordinate": {
+      "x": 2675.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_04_D"
+      },
+      {
+        "ID": "ZRT1PLF_04_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_05_D",
+    "platformName": "东屿站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 2900.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_05_U",
+    "platformName": "东屿站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 2900.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_05",
+    "stationName": "东屿站",
+    "coordinate": {
+      "x": 2900.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_05_D"
+      },
+      {
+        "ID": "ZRT1PLF_05_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_06_D",
+    "platformName": "山岸站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 3515.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_06_U",
+    "platformName": "山岸站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 3515.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_06",
+    "stationName": "山岸站",
+    "coordinate": {
+      "x": 3515.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_06_D"
+      },
+      {
+        "ID": "ZRT1PLF_06_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_07_D",
+    "platformName": "乡谷站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 3965.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_07_U",
+    "platformName": "乡谷站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 3965.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_07",
+    "stationName": "乡谷站",
+    "coordinate": {
+      "x": 3965.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_07_D"
+      },
+      {
+        "ID": "ZRT1PLF_07_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_08_D",
+    "platformName": "守望之乡站-3站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4303.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_08_U",
+    "platformName": "守望之乡站-4站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4303.5,
+      "z": 3121.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_08",
+    "stationName": "守望之乡站",
+    "coordinate": {
+      "x": 4303.5,
+      "z": 3121.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_08_D"
+      },
+      {
+        "ID": "ZRT1PLF_08_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225",
+    "ModifityTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_09_D",
+    "platformName": "海原北站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4574.5,
+      "z": 3884.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_09_U",
+    "platformName": "海原北站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4574.5,
+      "z": 3884.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_09",
+    "stationName": "海原北站",
+    "coordinate": {
+      "x": 4574.5,
+      "z": 3884.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_09_D"
+      },
+      {
+        "ID": "ZRT1PLF_09_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_10_D",
+    "platformName": "海原站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4760.5,
+      "z": 4090.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      },
+      {
+        "ID": "ZRT1_01B_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_10_U",
+    "platformName": "海原站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4760.5,
+      "z": 4090.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01C_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      },
+      {
+        "ID": "ZRT1_01B_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_10",
+    "stationName": "海原站",
+    "coordinate": {
+      "x": 4760.5,
+      "z": 4090.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_10_D"
+      },
+      {
+        "ID": "ZRT1PLF_10_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_11_D",
+    "platformName": "岚岸站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4791.5,
+      "z": 4385.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_11_U",
+    "platformName": "岚岸站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4791.5,
+      "z": 4385.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_11",
+    "stationName": "岚岸站",
+    "coordinate": {
+      "x": 4791.5,
+      "z": 4385.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_11_D"
+      },
+      {
+        "ID": "ZRT1PLF_11_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_12_D",
+    "platformName": "白霖教堂站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4879.5,
+      "z": 4508.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_12_U",
+    "platformName": "白霖教堂站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4879.5,
+      "z": 4508.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_12",
+    "stationName": "白霖教堂站",
+    "coordinate": {
+      "x": 4879.5,
+      "z": 4508.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_12_D"
+      },
+      {
+        "ID": "ZRT1PLF_12_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_13_D",
+    "platformName": "白霖站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4930.5,
+      "z": 4624.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_13_U",
+    "platformName": "白霖站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4930.5,
+      "z": 4624.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_13",
+    "stationName": "白霖站",
+    "coordinate": {
+      "x": 4930.5,
+      "z": 4624.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_13_D"
+      },
+      {
+        "ID": "ZRT1PLF_13_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_14_D",
+    "platformName": "北城外站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4987.5,
+      "z": 4783.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      },
+      {
+        "ID": "ZRT1_01A_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_14_U",
+    "platformName": "北城外站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 4987.5,
+      "z": 4783.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01B_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      },
+      {
+        "ID": "ZRT1_01A_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_14",
+    "stationName": "北城外站",
+    "coordinate": {
+      "x": 4987.5,
+      "z": 4783.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_14_D"
+      },
+      {
+        "ID": "ZRT1PLF_14_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_15_D",
+    "platformName": "西城港站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5014.5,
+      "z": 4875.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_15_U",
+    "platformName": "西城港站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5014.5,
+      "z": 4875.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_15",
+    "stationName": "西城港站",
+    "coordinate": {
+      "x": 5014.5,
+      "z": 4875.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_15_D"
+      },
+      {
+        "ID": "ZRT1PLF_15_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_16_D",
+    "platformName": "南麓广场站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5079.5,
+      "z": 4981.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_16_U",
+    "platformName": "南麓广场站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5079.5,
+      "z": 4981.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_16",
+    "stationName": "南麓广场站",
+    "coordinate": {
+      "x": 5079.5,
+      "z": 4981.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_16_D"
+      },
+      {
+        "ID": "ZRT1PLF_16_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_17_D",
+    "platformName": "南山口站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5118.5,
+      "z": 4981.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_17_U",
+    "platformName": "南山口站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5118.5,
+      "z": 4981.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_17",
+    "stationName": "南山口站",
+    "coordinate": {
+      "x": 5118.5,
+      "z": 4981.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_15_D"
+      },
+      {
+        "ID": "ZRT1PLF_15_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_18_D",
+    "platformName": "东坪站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5213.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_18_U",
+    "platformName": "东坪站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5213.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_18",
+    "stationName": "东坪站",
+    "coordinate": {
+      "x": 5213.5,
+      "z": 4896.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_18_D"
+      },
+      {
+        "ID": "ZRT1PLF_18_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_19_D",
+    "platformName": "溯东站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5468.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      },
+      {
+        "ID": "ZRT1_01D_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_19_U",
+    "platformName": "溯东站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5468.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01A_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      },
+      {
+        "ID": "ZRT1_01D_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_20_D",
+    "platformName": "漪泱居前站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5727.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01D_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_20_U",
+    "platformName": "漪泱居前站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5727.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01D_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_20",
+    "stationName": "漪泱居前站",
+    "coordinate": {
+      "x": 5727.5,
+      "z": 4896.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_20_D"
+      },
+      {
+        "ID": "ZRT1PLF_20_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_21_D",
+    "platformName": "漪泱站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5847.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01D_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_21_U",
+    "platformName": "漪泱站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5847.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01D_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_21",
+    "stationName": "漪泱站",
+    "coordinate": {
+      "x": 5847.5,
+      "z": 4896.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_21_D"
+      },
+      {
+        "ID": "ZRT1PLF_21_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_22_D",
+    "platformName": "幽南高架东站-1站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5982.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01D_D",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "platformID": "ZRT1PLF_22_U",
+    "platformName": "幽南高架东站-2站台",
+    "Situation": true,
+    "Connect": true,
+    "coordinate": {
+      "x": 5982.5,
+      "z": 4896.5
+    },
+    "lines": [
+      {
+        "ID": "ZRT1_01D_U",
+        "Avaliable": true,
+        "Overtaking": false,
+        "getin": true,
+        "getout": true,
+        "NextOT": false
+      }
+    ],
+    "Type": "Points",
+    "Class": "PLF",
+    "World": 0,
+    "CreateTime": "20251225"
+  },
+  {
+    "stationID": "ZRT1STA_22",
+    "stationName": "幽南高架东站",
+    "coordinate": {
+      "x": 5982.5,
+      "z": 4896.5
+    },
+    "platforms": [
+      {
+        "ID": "ZRT1PLF_22_D"
+      },
+      {
+        "ID": "ZRT1PLF_22_U"
+      }
+    ],
+    "Type": "Points",
+    "Class": "STA",
+    "World": 0,
+    "CreateTime": "20251225"
+  }
+]

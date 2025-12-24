@@ -17,7 +17,7 @@ import { Link, X } from 'lucide-react';
 
 export type WorldPoint = { x: number; z: number };
 
-type AssistLineMode = 'fixedLine' | 'pickFeature';
+type AssistLineMode = 'fixedLine' | 'coordSystem' | 'pickFeature';
 type FixedAxis = 'x' | 'z';
 
 type GeometryRings = {
@@ -25,11 +25,30 @@ type GeometryRings = {
   closed: boolean[];
 };
 
+// ---- 0.5 四舍五入：支持负数对称（避免 0.5 边界在负数方向的偏差） ----
+const round05 = (n: number) => {
+  if (!Number.isFinite(n)) return n;
+  const s = n < 0 ? -1 : 1;
+  const a = Math.abs(n);
+  return s * (Math.round((a + Number.EPSILON) * 2) / 2);
+};
+
+const fmt05 = (n: number) => {
+  const v = round05(n);
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+};
+
 type AssistLineTarget =
   | {
       kind: 'fixedLine';
       axis: FixedAxis;
-      value: number; // integer
+      value: number; // 支持 0.5
+      label: string;
+    }
+  | {
+      kind: 'coordSystem';
+      xRef: number; // 支持 0.5
+      zRef: number; // 支持 0.5
       label: string;
     }
   | {
@@ -165,12 +184,14 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
     defaultPanelPosition = { x: 16, y: 260 },
   } = props;
 
+  const initThreshold = round05(defaultThreshold);
+
   const [enabled, setEnabled] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
 
   // 阈值（格）
-  const [threshold, setThreshold] = useState<number>(defaultThreshold);
-  const [thresholdInput, setThresholdInput] = useState<string>(String(defaultThreshold));
+  const [threshold, setThreshold] = useState<number>(initThreshold);
+  const [thresholdInput, setThresholdInput] = useState<string>(fmt05(initThreshold));
 
   // 模式
   const [mode, setMode] = useState<AssistLineMode>('pickFeature');
@@ -178,6 +199,10 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
   // 固定直线参数
   const [fixedAxis, setFixedAxis] = useState<FixedAxis>('x');
   const [fixedValueInput, setFixedValueInput] = useState<string>('');
+
+  // 参考坐标系参数：两条固定直线（x=... 与 z=...）
+  const [csXInput, setCsXInput] = useState<string>('');
+  const [csZInput, setCsZInput] = useState<string>('');
 
   // 目标与状态
   const [target, setTarget] = useState<AssistLineTarget | null>(null);
@@ -279,6 +304,40 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
         opacity: 0.85,
         interactive: false,
       }).addTo(hg);
+
+      return;
+    }
+
+    if (target.kind === 'coordSystem') {
+      // x=常量（竖线）+ z=常量（横线）
+      const ax: WorldPoint = { x: target.xRef, z: -VIS_EXTENT };
+      const bx: WorldPoint = { x: target.xRef, z: VIS_EXTENT };
+      const az: WorldPoint = { x: -VIS_EXTENT, z: target.zRef };
+      const bz: WorldPoint = { x: VIS_EXTENT, z: target.zRef };
+
+      const llax = toLatLng(ax);
+      const llbx = toLatLng(bx);
+      const llaz = toLatLng(az);
+      const llbz = toLatLng(bz);
+      if (!llax || !llbx || !llaz || !llbz) return;
+
+      L.polyline([llax, llbx], {
+        color: '#ffffff',
+        weight: 4,
+        dashArray: '4 8',
+        opacity: 0.85,
+        interactive: false,
+      }).addTo(hg);
+
+      L.polyline([llaz, llbz], {
+        color: '#ffffff',
+        weight: 4,
+        dashArray: '4 8',
+        opacity: 0.85,
+        interactive: false,
+      }).addTo(hg);
+
+      return;
     }
   }, [enabled, target, leafletMapRef, projectionRef, toLatLng]);
 
@@ -378,32 +437,53 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
       setStatusText('阈值无效：请输入 >= 0 的数字');
       return;
     }
-    setThreshold(v);
-    setStatusText(`已应用阈值：${v} 格`);
+    const r = round05(v);
+    setThreshold(r);
+    setThresholdInput(fmt05(r));
+    setStatusText(`已应用阈值：${fmt05(r)} 格`);
   }, [thresholdInput]);
 
   /* -------------------- 固定直线应用 -------------------- */
   const applyFixedLine = useCallback(() => {
     const raw = fixedValueInput.trim();
-    if (!/^-?\d+$/.test(raw)) {
-      setStatusText('固定直线无效：仅允许输入整数坐标');
-      return;
-    }
-    const v = Number.parseInt(raw, 10);
+    const v = Number(raw);
     if (!Number.isFinite(v)) {
-      setStatusText('固定直线无效：请输入有效整数');
+      setStatusText('固定直线无效：请输入有效数字（支持 0.5）');
       return;
     }
+    const r = round05(v);
 
     setTarget({
       kind: 'fixedLine',
       axis: fixedAxis,
-      value: v,
-      label: `固定直线（${fixedAxis === 'x' ? 'x' : 'z'} = ${v}）`,
+      value: r,
+      label: `固定直线（${fixedAxis === 'x' ? 'x' : 'z'} = ${fmt05(r)}）`,
     });
 
-    setStatusText(`已设置辅助线：${fixedAxis === 'x' ? 'x' : 'z'} = ${v}`);
+    setStatusText(`已设置辅助线：${fixedAxis === 'x' ? 'x' : 'z'} = ${fmt05(r)}`);
   }, [fixedAxis, fixedValueInput]);
+
+  /* -------------------- 参考坐标系应用（两条固定直线） -------------------- */
+  const applyCoordSystem = useCallback(() => {
+    const x = Number(csXInput.trim());
+    const z = Number(csZInput.trim());
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      setStatusText('参考坐标系无效：请输入有效数字（支持 0.5）');
+      return;
+    }
+
+    const xr = round05(x);
+    const zr = round05(z);
+
+    setTarget({
+      kind: 'coordSystem',
+      xRef: xr,
+      zRef: zr,
+      label: `参考坐标系（x = ${fmt05(xr)}, z = ${fmt05(zr)}）`,
+    });
+
+    setStatusText(`已设置参考坐标系：x=${fmt05(xr)}，z=${fmt05(zr)}`);
+  }, [csXInput, csZInput]);
 
   /* -------------------- 核心：贴附计算（通用能力，向外暴露） -------------------- */
   const transformWorldPoint = useCallback(
@@ -421,6 +501,37 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
           return { point: snappedPoint, snapped: true, dist: d, targetLabel: target.label };
         }
         return { point: p, snapped: false, dist: d, targetLabel: target.label };
+      }
+
+      // 参考坐标系：两条固定直线（xRef 与 zRef）；若距离相同且都在阈值内，优先 x
+      if (target.kind === 'coordSystem') {
+        const dx = Math.abs(p.x - target.xRef);
+        const dz = Math.abs(p.z - target.zRef);
+
+        const xOk = dx <= threshold;
+        const zOk = dz <= threshold;
+
+        if (!xOk && !zOk) {
+          return { point: p, snapped: false, dist: Math.min(dx, dz), targetLabel: target.label };
+        }
+
+        const snapToX = xOk && (!zOk || dx <= dz); // tie -> x
+
+        if (snapToX) {
+          return {
+            point: { x: target.xRef, z: p.z },
+            snapped: true,
+            dist: dx,
+            targetLabel: `${target.label}（贴附 x）`,
+          };
+        }
+
+        return {
+          point: { x: p.x, z: target.zRef },
+          snapped: true,
+          dist: dz,
+          targetLabel: `${target.label}（贴附 z）`,
+        };
       }
 
       // 选择要素：最近点
@@ -451,6 +562,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
   const modeButtons = useMemo(
     () => [
       { key: 'fixedLine' as const, label: '固定直线' },
+      { key: 'coordSystem' as const, label: '参考坐标系' },
       { key: 'pickFeature' as const, label: '选择要素' },
     ],
     []
@@ -459,33 +571,32 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
   return (
     <div className="mt-2">
       {/* “辅助线”按钮 */}
-<button
-  type="button"
-  className={`w-full px-3 py-1.5 rounded text-sm border flex items-center gap-2 ${
-    enabled ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300'
-  }`}
-  onClick={() => {
-    setEnabled((v) => {
-      const next = !v;
-      if (next) {
-        setPanelOpen(true);
-        setStatusText('');
-        return next;
-      }
+      <button
+        type="button"
+        className={`w-full px-3 py-1.5 rounded text-sm border flex items-center gap-2 ${
+          enabled ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300'
+        }`}
+        onClick={() => {
+          setEnabled((v) => {
+            const next = !v;
+            if (next) {
+              setPanelOpen(true);
+              setStatusText('');
+              return next;
+            }
 
-      // 关闭：清理目标与拾取
-      setTarget(null);
-      cancelPicking();
-      setStatusText('');
-      return next;
-    });
-  }}
-  title="辅助线"
->
-  <Link size={16} />
-  {enabled ? `辅助线(启用中), 当前目标: ${target?.label ?? '未选择'}` : '辅助线'}
-</button>
-
+            // 关闭：清理目标与拾取
+            setTarget(null);
+            cancelPicking();
+            setStatusText('');
+            return next;
+          });
+        }}
+        title="辅助线"
+      >
+        <Link size={16} />
+        {enabled ? `辅助线(启用中), 当前目标: ${target?.label ?? '未选择'}` : '辅助线'}
+      </button>
 
       {/* 状态文本（可选） */}
       {statusText && <div className="mt-2 text-xs text-gray-700">{statusText}</div>}
@@ -510,7 +621,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
             </div>
 
             <div className="p-3 space-y-3">
-              {/* 说明（保持你原有“选择贴线目标后...”文案框架） */}
+              {/* 说明 */}
               <div className="text-xs text-gray-600">
                 选择辅助线目标后，绘制/编辑/控制点修改与添加时：
                 <div className="mt-1">
@@ -518,7 +629,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                 </div>
               </div>
 
-              {/* 阈值输入 + 应用（放在说明下面） */}
+              {/* 阈值输入 + 应用 */}
               <div className="flex items-center gap-2">
                 <div className="text-xs text-gray-700 whitespace-nowrap">阈值（格）</div>
                 <input
@@ -550,7 +661,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                       onClick={() => {
                         setMode(m.key);
                         setStatusText('');
-                        // 切换到固定直线时直接退出拾取
+                        // 切换非 pick 时直接退出拾取
                         if (m.key !== 'pickFeature') cancelPicking();
                       }}
                     >
@@ -562,7 +673,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                 {/* 模式细节区 */}
                 {mode === 'fixedLine' && (
                   <div className="mt-2 space-y-2">
-                    <div className="text-xs text-gray-600">设置一条与坐标轴平行的无限长参考线。</div>
+                    <div className="text-xs text-gray-600">设置一条与坐标轴平行的无限长参考线（支持 0.5）。</div>
                     <div className="flex items-center gap-2">
                       <select
                         value={fixedAxis}
@@ -578,8 +689,8 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                         value={fixedValueInput}
                         onChange={(e) => setFixedValueInput(e.target.value)}
                         className="flex-1 border rounded px-2 py-1 text-xs"
-                        placeholder="整数坐标"
-                        inputMode="numeric"
+                        placeholder="坐标（支持 0.5）"
+                        inputMode="decimal"
                       />
 
                       <button
@@ -587,6 +698,45 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                         className="px-2 py-1 rounded text-xs border bg-white text-gray-800 border-gray-300 hover:bg-gray-50"
                         onClick={applyFixedLine}
                         title="应用固定直线"
+                      >
+                        应用
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {mode === 'coordSystem' && (
+                  <div className="mt-2 space-y-2">
+                    <div className="text-xs text-gray-600">
+                      输入参考坐标系的 x 与 z，两条固定直线将同时生效（支持 0.5）。当两条线距离相同且都在阈值内时，优先贴附 x 轴。
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-gray-700 whitespace-nowrap">x</div>
+                      <input
+                        type="text"
+                        value={csXInput}
+                        onChange={(e) => setCsXInput(e.target.value)}
+                        className="w-24 border rounded px-2 py-1 text-xs"
+                        placeholder="如 10.5"
+                        inputMode="decimal"
+                      />
+
+                      <div className="text-xs text-gray-700 whitespace-nowrap">z</div>
+                      <input
+                        type="text"
+                        value={csZInput}
+                        onChange={(e) => setCsZInput(e.target.value)}
+                        className="w-24 border rounded px-2 py-1 text-xs"
+                        placeholder="如 -3.5"
+                        inputMode="decimal"
+                      />
+
+                      <button
+                        type="button"
+                        className="px-2 py-1 rounded text-xs border bg-white text-gray-800 border-gray-300 hover:bg-gray-50"
+                        onClick={applyCoordSystem}
+                        title="应用参考坐标系"
                       >
                         应用
                       </button>
@@ -658,7 +808,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                   <li>阈值是全局通用参数：任何调用 transformWorldPoint 的操作都会遵循该阈值。</li>
                   <li>当距离大于阈值时，不执行贴附（落点保持为实际点击位置）。</li>
                   <li>“选择要素”会监听地图中可交互的 Polyline/Polygon（包含测绘层与其它展示层）。</li>
-                  <li>“固定直线”仅支持整数坐标（与页面左下角坐标显示的整数一致）。</li>
+                  <li>“固定直线/参考坐标系”支持 0.5，输入会按 0.5 节点四舍五入后应用。</li>
                 </ul>
               </div>
             </div>

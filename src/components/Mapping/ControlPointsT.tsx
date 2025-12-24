@@ -10,12 +10,12 @@ import {
 } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-
+import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/GridSnapModeSwitch';
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
-import { Pencil, Plus, Save, Undo2, Redo2, X } from 'lucide-react';
+import { Pencil, Plus, Save, Undo2, Redo2, X, ArrowLeftRight } from 'lucide-react';
 
-export type WorldPoint = { x: number; z: number };
+export type WorldPoint = { x: number; z: number; y?: number };
 
 export type ControlPointsTHandle = {
   /** 主控件可用于判断是否需要屏蔽绘制区 click */
@@ -232,7 +232,7 @@ export default forwardRef<ControlPointsTHandle, ControlPointsTProps>(function Co
 //    [projectionRef]
 //  );
 
-  const fmt = useCallback((p: WorldPoint) => `${p.x.toFixed(1)}, ${p.z.toFixed(1)}`, []);
+  const fmt = useCallback((p: WorldPoint) => `${formatGridNumber(p.x)}, ${formatGridNumber(p.z)}`, []);
 
   const modeOk = useMemo(() => activeMode === 'polyline' || activeMode === 'polygon', [activeMode]);
 
@@ -438,120 +438,136 @@ marker.on('click', (e: any) => {
     });
   }, [editEnabled, addEnabled, modeOk, sessionCoords, activeColor, selectedIndex, fmt, projectionRef]);
 
-  // -------- map click：修改模式“选点后下一次点击移动”--------
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    if (!map) return;
+// -------- map click：修改模式“选点后下一次点击移动”--------
+useEffect(() => {
+  const map = leafletMapRef.current;
+  if (!map) return;
 
-    const onMapClick = (e: L.LeafletMouseEvent) => {
-      if (!editEnabled) return;
-      if (!editPanelOpen) return;
-      if (!modeOk) return;
-      if (selectedIndex === null) return;
+  const onMapClick = (e: L.LeafletMouseEvent) => {
+    if (!editEnabled) return;
+    if (!editPanelOpen) return;
+    if (!modeOk) return;
+    if (selectedIndex === null) return;
 
-      const w0 = projToWorld(e.latlng);
-      if (!w0) return;
+    const w0 = projToWorld(e.latlng);
+    if (!w0) return;
 
-      // 参考线过滤（高优先级）
-      const w = filterWorldPointByAssistLine ? filterWorldPointByAssistLine(w0) : w0;
+    // 参考线过滤（高优先级）
+    const wFiltered = filterWorldPointByAssistLine ? filterWorldPointByAssistLine(w0) : w0;
 
-      setWorkingCoords((prev) => {
-        const base = (prev ?? activeCoords).slice();
-        if (selectedIndex < 0 || selectedIndex >= base.length) return prev ?? activeCoords;
+    // 网格化（整数 / 0.5 / 强制中心）：在“参考线修正”之后对坐标做修正
+    const wSnapped = snapWorldPointByMode(wFiltered);
 
-        const from = base[selectedIndex];
-        const to = w;
+    setWorkingCoords((prev) => {
+      const base = (prev ?? activeCoords).slice();
+      if (selectedIndex < 0 || selectedIndex >= base.length) return prev ?? activeCoords;
 
-        base[selectedIndex] = to;
+      const from = base[selectedIndex];
+      const to: WorldPoint = { ...wSnapped, y: from?.y };
+      base[selectedIndex] = to;
 
-        // 记录动作
-        setUndoStack((u) => [...u, { kind: 'move', index: selectedIndex, from, to }]);
-        setRedoStack([]); // 新动作清空 redo
+      // 记录动作
+      setUndoStack((u) => [...u, { kind: 'move', index: selectedIndex, from, to }]);
+      setRedoStack([]); // 新动作清空 redo
 
-        setStatusText(`已修改控制点 #${selectedIndex + 1} -> ${fmt(to)}`);
-        return base;
-      });
-    };
+      setStatusText(`已修改控制点 #${selectedIndex + 1} -> ${fmt(to)}`);
+      return base;
+    });
+  };
 
-    map.on('click', onMapClick);
-    return () => {
-      map.off('click', onMapClick);
-    };
-  }, [
-    leafletMapRef,
-    editEnabled,
-    editPanelOpen,
-    modeOk,
-    selectedIndex,
-    projToWorld,
-    activeCoords,
-    filterWorldPointByAssistLine,
-    fmt,
-  ]);
+  map.on('click', onMapClick);
+  return () => {
+    map.off('click', onMapClick);
+  };
+}, [
+  leafletMapRef,
+  editEnabled,
+  editPanelOpen,
+  modeOk,
+  selectedIndex,
+  projToWorld,
+  activeCoords,
+  filterWorldPointByAssistLine,
+  fmt,
+]);
 
-  // -------- map click：添加模式“点击插入（阈值 50）”--------
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    if (!map) return;
 
-    const onMapClick = (e: L.LeafletMouseEvent) => {
-      if (!addEnabled) return;
-      if (!addPanelOpen) return;
-      if (!modeOk) return;
+// -------- map click：添加模式“点击插入（阈值 50）”--------
+useEffect(() => {
+  const map = leafletMapRef.current;
+  if (!map) return;
 
-      const w = projToWorld(e.latlng);
-      if (!w) return;
+  const onMapClick = (e: L.LeafletMouseEvent) => {
+    if (!addEnabled) return;
+    if (!addPanelOpen) return;
+    if (!modeOk) return;
 
-      setWorkingCoords((prev) => {
-        const baseRaw = prev ?? activeCoords;
-        const isPolygon = activeMode === 'polygon';
+    const w = projToWorld(e.latlng);
+    if (!w) return;
 
-        const geom = normalizeRingsForPolygonLike(baseRaw, isPolygon);
-        const coords = geom.rings[0];
+    setWorkingCoords((prev) => {
+      const baseRaw = prev ?? activeCoords;
+      const isPolygon = activeMode === 'polygon';
 
-        if (coords.length < 2) {
-          setStatusText('控制点添加：当前要素控制点不足 2 个，无法插入');
-          return prev ?? activeCoords;
+      const geom = normalizeRingsForPolygonLike(baseRaw, isPolygon);
+      const coords = geom.rings[0];
+
+      if (coords.length < 2) {
+        setStatusText('控制点添加：当前要素控制点不足 2 个，无法插入');
+        return prev ?? activeCoords;
+      }
+
+      const best = closestPointOnRings(w, geom);
+      if (!best.point || !Number.isFinite(best.dist)) return prev ?? activeCoords;
+
+      if (best.dist > ADD_SNAP_MAX_DIST) {
+        setStatusText(`未插入：距离当前要素超过 ${ADD_SNAP_MAX_DIST} 格`);
+        return prev ?? activeCoords;
+      }
+
+      const segIndex = best.segIndex;
+      const n = coords.length;
+
+      const insertIndex = (() => {
+        if (isPolygon) {
+          if (segIndex >= n - 1) return n; // last->first
+          return segIndex + 1;
         }
+        // polyline
+        if (segIndex < 0) return n;
+        return Math.min(segIndex + 1, n);
+      })();
 
-        const best = closestPointOnRings(w, geom);
-        if (!best.point || !Number.isFinite(best.dist)) return prev ?? activeCoords;
+      const next = coords.slice();
 
-        if (best.dist > ADD_SNAP_MAX_DIST) {
-          setStatusText(`未插入：距离当前要素超过 ${ADD_SNAP_MAX_DIST} 格`);
-          return prev ?? activeCoords;
-        }
+      const segA = coords[segIndex];
+      const segB = coords[(segIndex + 1) % n];
+      const yInterp =
+        typeof segA?.y === 'number' && typeof segB?.y === 'number'
+          ? segA.y + (segB.y - segA.y) * (best.t ?? 0)
+          : undefined;
 
-        const segIndex = best.segIndex;
-        const n = coords.length;
+      // ① 最近点（落点修正到当前要素）
+      // ② 网格化（整数 / 0.5 / 强制中心）：在“最近点修正”之后对坐标做修正
+      const snapped = snapWorldPointByMode(best.point);
+      const inserted: WorldPoint = { ...snapped, y: yInterp };
 
-        const insertIndex = (() => {
-          if (isPolygon) {
-            if (segIndex >= n - 1) return n; // last->first
-            return segIndex + 1;
-          }
-          // polyline
-          if (segIndex < 0) return n;
-          return Math.min(segIndex + 1, n);
-        })();
+      next.splice(insertIndex, 0, inserted);
 
-        const next = coords.slice();
-        next.splice(insertIndex, 0, best.point);
+      // 记录动作：必须记录 inserted（而不是 best.point），否则撤回/恢复与“保存前显示”都会出现未网格化的问题
+      setUndoStack((u) => [...u, { kind: 'insert', index: insertIndex, point: inserted }]);
+      setRedoStack([]);
 
-        // 记录动作
-        setUndoStack((u) => [...u, { kind: 'insert', index: insertIndex, point: best.point! }]);
-        setRedoStack([]);
+      setStatusText(`已插入控制点：${fmt(inserted)}（阈值 ${ADD_SNAP_MAX_DIST}）`);
+      return next;
+    });
+  };
 
-        setStatusText(`已插入控制点：${fmt(best.point)}（阈值 ${ADD_SNAP_MAX_DIST}）`);
-        return next;
-      });
-    };
-
-    map.on('click', onMapClick);
-    return () => {
-      map.off('click', onMapClick);
-    };
-  }, [leafletMapRef, addEnabled, addPanelOpen, modeOk, projToWorld, activeCoords, activeMode, fmt]);
+  map.on('click', onMapClick);
+  return () => {
+    map.off('click', onMapClick);
+  };
+}, [leafletMapRef, addEnabled, addPanelOpen, modeOk, projToWorld, activeCoords, activeMode, fmt]);
 
   // -------- 撤回/恢复 --------
   const doUndo = useCallback(() => {
@@ -768,6 +784,35 @@ marker.on('click', (e: any) => {
   const canEdit = useMemo(() => modeOk && activeCoords.length >= 1, [modeOk, activeCoords.length]);
   const canAdd = useMemo(() => modeOk && activeCoords.length >= 2, [modeOk, activeCoords.length]);
 
+  // 控制点反转：线/面 且 控制点数 > 2 时可用；edit/add 启动时禁用避免冲突
+  const busy = useMemo(() => Boolean(editEnabled || addEnabled), [editEnabled, addEnabled]);
+
+  const canReverse = useMemo(() => {
+    if (!modeOk) return false;
+    if (activeCoords.length <= 1) return false; // “超过两个控制点”
+    if (busy) return false; // edit/add 启动中禁用
+    if (!onApplyActiveCoords) return false; // 没有回写通道则禁用
+    return true;
+  }, [modeOk, activeCoords.length, busy, onApplyActiveCoords]);
+
+  const doReverse = useCallback(() => {
+    if (!canReverse) return;
+
+    // 关键：reverse() 会原地修改数组，因此必须先 copy 再 reverse :contentReference[oaicite:1]{index=1}
+    const base = activeCoords.slice();
+
+    // 兼容：若 polygon 意外包含闭合点（首尾相同），先去掉末尾闭合点再处理
+    if (activeMode === 'polygon' && base.length >= 2 && samePoint(base[0], base[base.length - 1])) {
+      base.pop();
+    }
+
+    const reversed = base.slice().reverse();
+
+    onApplyActiveCoords?.(reversed);
+    setStatusText('已执行：控制点顺序反转');
+  }, [canReverse, activeCoords, activeMode, onApplyActiveCoords]);
+
+
   return (
     <div className="mt-2">
       {/* 主按钮行：在参考线按钮下面，仅 3 个按键 */}
@@ -807,6 +852,30 @@ marker.on('click', (e: any) => {
           <Plus size={14} />
           控制点添加
         </button>
+
+        <button
+          type="button"
+          className={`px-2 py-1 rounded text-xs border flex items-center gap-1 ${
+            canReverse ? 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50' : 'opacity-50 cursor-not-allowed bg-white text-gray-800 border-gray-300'
+          }`}
+          onClick={() => {
+            if (!canReverse) {
+              if (busy) {
+                setStatusText('控制点反转：控制点修改/添加启动中，为避免冲突已禁用');
+                return;
+              }
+              setStatusText('控制点反转：需要线/面要素且控制点数 > 2');
+              return;
+            }
+            doReverse();
+          }}
+          disabled={!canReverse}
+          title="控制点反转"
+        >
+          <ArrowLeftRight size={14} />
+          控制点反转
+        </button>
+
 
         {(editEnabled || addEnabled) && dirty && <div className="text-xs text-orange-700">未保存修改</div>}
       </div>

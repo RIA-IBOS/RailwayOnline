@@ -31,6 +31,10 @@ import type { ParsedLandmark } from '@/lib/landmarkParser';
 import MeasuringModule from '@/components/Mapping/MeasuringModule';
 import MeasurementToolsModule from '@/components/Mapping/Mtools';
 
+import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/GridSnapModeSwitch';
+
+
+
 // 世界配置
 const WORLDS = [
   { id: 'zth', name: '零洲', center: { x: -643, y: 35, z: -1562 } },
@@ -126,15 +130,26 @@ function MapContainer() {
       tileLayerRef.current.remove();
     }
 
-    // 添加新瓦片图层
-    let newTileLayer: L.TileLayer;
-    if (mapStyle === 'sketch') {
-      newTileLayer = createSketchTileLayer(currentWorld, 'flat');
-    } else if (mapStyle === 'watercolor') {
-      newTileLayer = createWatercolorTileLayer(currentWorld, 'flat');
-    } else {
-      newTileLayer = createDynmapTileLayer(currentWorld, 'flat');
-    }
+// 添加新瓦片图层
+let newTileLayer: L.TileLayer;
+
+
+const tileLayerOptions = {
+  minZoom: -3,
+  maxZoom: map.getMaxZoom(), // =5
+  minNativeZoom: 0,
+  maxNativeZoom: 3
+};
+
+if (mapStyle === 'sketch') {
+  newTileLayer = createSketchTileLayer(currentWorld, 'flat', tileLayerOptions);
+} else if (mapStyle === 'watercolor') {
+  newTileLayer = createWatercolorTileLayer(currentWorld, 'flat', tileLayerOptions);
+} else {
+  newTileLayer = createDynmapTileLayer(currentWorld, 'flat', tileLayerOptions);
+}
+
+
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
   }, [mapStyle, mapReady, currentWorld]);
@@ -332,13 +347,22 @@ function MapContainer() {
 
     // 添加新瓦片图层（根据当前风格选择）
     let newTileLayer: L.TileLayer;
-    if (mapStyle === 'sketch') {
-      newTileLayer = createSketchTileLayer(worldId, 'flat');
-    } else if (mapStyle === 'watercolor') {
-      newTileLayer = createWatercolorTileLayer(worldId, 'flat');
-    } else {
-      newTileLayer = createDynmapTileLayer(worldId, 'flat');
-    }
+const tileLayerOptions = {
+  minZoom: -3,
+  maxZoom: map.getMaxZoom(), // =5
+  minNativeZoom: 0,
+  maxNativeZoom: 3
+};
+
+if (mapStyle === 'sketch') {
+  newTileLayer = createSketchTileLayer(worldId, 'flat', tileLayerOptions);
+} else if (mapStyle === 'watercolor') {
+  newTileLayer = createWatercolorTileLayer(worldId, 'flat', tileLayerOptions);
+} else {
+  newTileLayer = createDynmapTileLayer(worldId, 'flat', tileLayerOptions);
+}
+
+
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
 
@@ -375,16 +399,27 @@ function MapContainer() {
       Number(world.center.z)
     );
 
-    // 创建地图
-    const map = L.map(mapRef.current, {
-      crs: crs,
-      center: centerLatLng,
-      zoom: 2,
-      minZoom: 0,
-      maxZoom: projection.maxZoom,
-      zoomControl: false,  // 禁用默认缩放控件，稍后自定义位置
-      attributionControl: true
-    });
+const minZoom = -3;                 // 9级：-3..5
+const maxZoom = projection.maxZoom; // 仍然是 5
+
+const map = L.map(mapRef.current, {
+  crs: crs,
+  center: centerLatLng,
+  zoom: 2,
+  minZoom,
+  maxZoom,
+
+  // 明确锁定“整数缩放”
+  zoomSnap: 1,
+  zoomDelta: 1,
+
+  zoomControl: false,
+  attributionControl: true
+});
+
+
+
+
 
     // 添加缩放控件 - 桌面端右下角，手机端左下角
     const isDesktop = window.innerWidth >= 640;
@@ -392,14 +427,23 @@ function MapContainer() {
 
     // 添加 Dynmap 瓦片图层 - 使用保存的世界和风格
     const savedMapStyle = loadMapSettings()?.mapStyle ?? 'default';
-    let tileLayer: L.TileLayer;
-    if (savedMapStyle === 'sketch') {
-      tileLayer = createSketchTileLayer(savedWorld, 'flat');
-    } else if (savedMapStyle === 'watercolor') {
-      tileLayer = createWatercolorTileLayer(savedWorld, 'flat');
-    } else {
-      tileLayer = createDynmapTileLayer(savedWorld, 'flat');
-    }
+const tileLayerOptions = {
+  minZoom: -3,
+  maxZoom: projection.maxZoom, // 5
+  minNativeZoom: 0,            // 关键：zoom<0 时用 0 级瓦片缩放显示
+  maxNativeZoom: 3             // 保持你现有 Dynmap 行为
+};
+
+let tileLayer: L.TileLayer;
+if (savedMapStyle === 'sketch') {
+  tileLayer = createSketchTileLayer(savedWorld, 'flat', tileLayerOptions);
+} else if (savedMapStyle === 'watercolor') {
+  tileLayer = createWatercolorTileLayer(savedWorld, 'flat', tileLayerOptions);
+} else {
+  tileLayer = createDynmapTileLayer(savedWorld, 'flat', tileLayerOptions);
+}
+
+
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -430,17 +474,21 @@ function MapContainer() {
     coordControl.addTo(map);
 
     // 监听鼠标移动，更新坐标显示
-    map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      // 使用投影的逆转换获取世界坐标
-      const proj = projectionRef.current;
-      if (!proj) return;
+map.on('mousemove', (e: L.LeafletMouseEvent) => {
+  const proj = projectionRef.current;
+  if (!proj) return;
 
-      const worldCoord = proj.latLngToLocation(e.latlng, 64);
-      const coordDiv = document.querySelector('.coord-display');
-      if (coordDiv) {
-        coordDiv.innerHTML = `X: ${Math.round(worldCoord.x)}, Z: ${Math.round(worldCoord.z)}`;
-      }
-    });
+  const worldCoord = proj.latLngToLocation(e.latlng, 64);
+
+  // 与测绘控件保持一致：坐标显示也遵循“方块中心(.5)/方块边缘(.0)/自动(.5步进)”
+  const snapped = snapWorldPointByMode({ x: worldCoord.x, z: worldCoord.z });
+
+  const coordDiv = document.querySelector('.coord-display');
+  if (coordDiv) {
+    coordDiv.innerHTML = `X: ${formatGridNumber(snapped.x)}, Z: ${formatGridNumber(snapped.z)}`;
+  }
+});
+
 
     leafletMapRef.current = map;
     setMapReady(true);
@@ -463,6 +511,7 @@ function MapContainer() {
       mapReady={mapReady}
       leafletMapRef={leafletMapRef}
       projectionRef={projectionRef}
+      currentWorldId={currentWorld}
       closeSignal={measuringCloseSignal}
       onBecameActive={() => setMeasureToolsCloseSignal(v => v + 1)}
       />
