@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -93,32 +92,9 @@ function polygonCentroidXZ(poly: Array<{ x: number; z: number }>): { x: number; 
   return { x: cx, z: cz };
 }
 
-function makeLabelMarker(
-  latlng: L.LatLng,
-  text: string,
-  placement: 'center' | 'near',
-  withDot?: boolean,
-  offsetY?: number, // ✅ 新增：第5个参数，放最后，避免改其他调用点
-) {
+function makeLabelMarker(latlng: L.LatLng, text: string, placement: 'center' | 'near') {
   const safe = String(text ?? '').replace(/[<>&]/g, (m) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' } as any)[m]);
-
-  // 原本的位移逻辑保持不变
   const transform = placement === 'near' ? 'translate(-50%, -120%)' : 'translate(-50%, -50%)';
-
-  // ✅ 只对 near 再额外上移（px）。center 不动，避免影响面要素中心标注。
-  const extraMarginTop = placement === 'near' ? -(Number(offsetY ?? 0)) : 0;
-
-  const dotHtml = withDot
-    ? `<span style="
-         display:inline-block;
-         width:8px;height:8px;
-         border-radius:999px;
-         background:#fff;
-         margin-right:6px;
-         box-shadow:0 0 0 2px rgba(0,0,0,0.35);
-       "></span>`
-    : '';
-
   const html = `
     <div style="
       background: rgba(0,0,0,0.65);
@@ -128,20 +104,14 @@ function makeLabelMarker(
       font-size: 12px;
       white-space: nowrap;
       transform: ${transform};
-      margin-top: ${extraMarginTop}px;   /* ✅ 新增 */
       pointer-events: none;
-      display: inline-flex;
-      align-items: center;
-    ">${dotHtml}${safe}</div>
+    ">${safe}</div>
   `;
-
   return L.marker(latlng, {
     interactive: false,
     icon: L.divIcon({ className: '', html, iconSize: [0, 0] }),
   });
 }
-
-
 
 async function fetchJsonArray(url: string): Promise<any[]> {
   const resp = await fetch(url);
@@ -217,22 +187,21 @@ export default function RuleDrivenLayer(props: Props) {
   const [activeBuildingName, setActiveBuildingName] = useState<string>('');
 
   // 让 React 能感知 Leaflet 的 zoom/move（否则 ctx/showFloorUI 可能停留在旧值）
-const [leafletZoomState, setLeafletZoomState] = useState<number>(() => map.getZoom());
+  const [leafletZoomState, setLeafletZoomState] = useState<number>(() => map.getZoom());
 
-useEffect(() => {
-  if (!mapReady) return;
+  useEffect(() => {
+    if (!mapReady) return;
 
-  const sync = () => setLeafletZoomState(map.getZoom());
-  sync();
+    const sync = () => setLeafletZoomState(map.getZoom());
+    sync();
 
-  map.on('zoomend', sync);
-  map.on('moveend', sync);
-  return () => {
-    map.off('zoomend', sync);
-    map.off('moveend', sync);
-  };
-}, [mapReady, map]);
-
+    map.on('zoomend', sync);
+    map.on('moveend', sync);
+    return () => {
+      map.off('zoomend', sync);
+      map.off('moveend', sync);
+    };
+  }, [mapReady, map]);
 
   // (1) 加载数据（worldId + dataSources）
   useEffect(() => {
@@ -310,19 +279,18 @@ useEffect(() => {
   }, [mapReady, map, visible]);
 
   const ctx: RenderContext = useMemo(() => {
-  const leafletZoom = leafletZoomState;
-  const zoomLevel = toZoomLevel(leafletZoom);
-  return {
-    worldId,
-    leafletZoom,
-    zoomLevel,
-    inFloorView: zoomLevel >= DEFAULT_FLOOR_VIEW.minLevel,
-    activeBuildingUid,
-    activeFloorSelector: floorOptions[activeFloorIndex]?.value ?? null,
-    activeBuildingFloorRefSet,
-  };
-}, [worldId, leafletZoomState, activeBuildingUid, activeBuildingFloorRefSet, floorOptions, activeFloorIndex]);
-
+    const leafletZoom = leafletZoomState;
+    const zoomLevel = toZoomLevel(leafletZoom);
+    return {
+      worldId,
+      leafletZoom,
+      zoomLevel,
+      inFloorView: zoomLevel >= DEFAULT_FLOOR_VIEW.minLevel,
+      activeBuildingUid,
+      activeFloorSelector: floorOptions[activeFloorIndex]?.value ?? null,
+      activeBuildingFloorRefSet,
+    };
+  }, [worldId, leafletZoomState, activeBuildingUid, activeBuildingFloorRefSet, floorOptions, activeFloorIndex]);
 
   // (4) 选择“当前激活建筑” + 生成楼层 options
   useEffect(() => {
@@ -361,30 +329,21 @@ useEffect(() => {
         }
       }
 
-const newUid = picked?.uid ?? null;
-if (newUid === activeBuildingUid) return;
 
-// 关键修复：先处理 picked==null，再决定是否 setActiveBuildingUid
-if (!picked) {
-  // 防闪烁：楼层视角中若瞬时没命中建筑，不立刻清空（保留上一次 activeBuildingUid）
-  if (inFloorView && activeBuildingUid) return;
+      // 防闪烁：楼层视角下若瞬时没命中建筑，不立刻清空（保留上一次 activeBuildingUid）
+      if (!picked) {
+        if (inFloorView && activeBuildingUid) return;
 
-  setActiveBuildingUid(null);
-  setActiveBuildingFloorRefSet(null);
-  setActiveBuildingName('');
-  setFloorOptions([]);
-  setActiveFloorIndex(0);
-  return;
-}
+        setActiveBuildingUid(null);
+        setActiveBuildingFloorRefSet(null);
+        setActiveBuildingName('');
+        setFloorOptions([]);
+        setActiveFloorIndex(0);
+        return;
+      }
 
-// picked 有值，才更新 activeBuildingUid
-setActiveBuildingUid(newUid);
-
-setActiveBuildingName(
-  String((picked.featureInfo as any)?.staBuildingName ?? '').trim()
-);
-
-
+      const newUid = picked.uid;
+      if (newUid !== activeBuildingUid) setActiveBuildingUid(newUid);
 
       setActiveBuildingName(String((picked.featureInfo as any)?.staBuildingName ?? '').trim());
 
@@ -422,8 +381,18 @@ setActiveBuildingName(
         return { value: v, label };
       });
 
+      // 尽量保持当前楼层选择（避免每次 moveend/zoomend 都重置为 0）
+      const prevValue = floorOptions[activeFloorIndex]?.value ?? null;
       setFloorOptions(opts);
-      setActiveFloorIndex(0);
+
+      if (opts.length === 0) {
+        setActiveFloorIndex(0);
+      } else if (prevValue) {
+        const idx = opts.findIndex(o => o.value === prevValue);
+        setActiveFloorIndex(idx >= 0 ? idx : 0);
+      } else {
+        setActiveFloorIndex(0);
+      }
     };
 
     updateActiveBuilding();
@@ -433,7 +402,7 @@ setActiveBuildingName(
       map.off('moveend', updateActiveBuilding);
       map.off('zoomend', updateActiveBuilding);
     };
-  }, [mapReady, map, projection, activeBuildingUid]);
+  }, [mapReady, map, projection, activeBuildingUid, floorOptions, activeFloorIndex]);
 
   // (5) 渲染：根据规则 + zoom + bounds + floor context 进行增量 add/remove
   useEffect(() => {
@@ -542,50 +511,16 @@ setActiveBuildingName(
 
   const showFloorUI = ctx.inFloorView && !!activeBuildingUid && floorOptions.length > 0 && visible;
 
-
-const floorUiRootRef = useRef<HTMLDivElement | null>(null);
-
-useEffect(() => {
-  const el = document.createElement('div');
-  el.id = 'floor-ui-root';
-  el.style.position = 'fixed';
-  el.style.top = '0';
-  el.style.left = '0';
-  el.style.width = '0';
-  el.style.height = '0';
-  el.style.zIndex = '2147483647';
-  document.body.appendChild(el);
-  floorUiRootRef.current = el;
-
-  return () => {
-    document.body.removeChild(el);
-    floorUiRootRef.current = null;
-  };
-}, []);
-
-console.log('[FloorUI]', {
-  showFloorUI,
-  inFloorView: ctx?.inFloorView,
-  zoomLevel: ctx?.zoomLevel,
-  activeBuildingUid,
-  floorOptionsLen: floorOptions?.length,
-  activeFloorIndex,
-  visible,
-});
-
-
   return (
     <>
       {showFloorUI && (
         <div
-  style={{ position: 'fixed', top: 80, right: 16, zIndex: 2147483647, pointerEvents: 'auto' }}
-  className="bg-white/90 rounded-lg shadow-lg border border-gray-200 p-2 w-28"
-  onMouseDown={(e) => e.stopPropagation()}
-  onDoubleClick={(e) => e.stopPropagation()}
-  onWheel={(e) => e.stopPropagation()}
->
-
-
+          className="absolute top-20 right-2 sm:right-4 z-[1200] bg-white/90 rounded-lg shadow-lg border border-gray-200 p-2 w-28"
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
           <div className="text-xs font-semibold text-gray-800 mb-1">楼层视角</div>
           <div className="text-[11px] text-gray-600 mb-2 truncate" title={activeBuildingName}>
             {activeBuildingName || '（未命名建筑）'}
@@ -768,67 +703,19 @@ function buildLabelLayer(
   }
   if (!text) return null;
 
-  const placement = labelPlan.placement ?? 'center';
-  const withDot = !!labelPlan.withDot;
-
-  // Points
+  // placement
   if (r.type === 'Points') {
     const ll = pointLatLng ?? (r.p3 ? projection.locationToLatLng(r.p3.x, r.p3.y, r.p3.z) : null);
     if (!ll) return null;
-    return makeLabelMarker(
-  ll,
-  text,
-  placement === 'center' ? 'near' : placement,
-  withDot,
-  labelPlan.offsetY, 
-);
-
+    return makeLabelMarker(ll, text, labelPlan.placement ?? 'near');
   }
 
-  if (!r.coords3 || r.coords3.length < 2) return null;
-
-  // Polyline：取“累计长度的中点”（更像沿线附着）
-  if (r.type === 'Polyline') {
-    let total = 0;
-    for (let i = 1; i < r.coords3.length; i++) {
-      const a = r.coords3[i - 1];
-      const b = r.coords3[i];
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      total += Math.hypot(dx, dz);
-    }
-    if (total <= 1e-9) {
-      const mid = r.coords3[Math.floor(r.coords3.length / 2)];
-      const ll = projection.locationToLatLng(mid.x, Y_FOR_DISPLAY, mid.z);
-      return makeLabelMarker(ll, text, 'center', withDot);
-    }
-    const half = total / 2;
-    let acc = 0;
-    for (let i = 1; i < r.coords3.length; i++) {
-      const a = r.coords3[i - 1];
-      const b = r.coords3[i];
-      const seg = Math.hypot(b.x - a.x, b.z - a.z);
-      if (acc + seg >= half) {
-        const t = (half - acc) / (seg || 1);
-        const x = a.x + (b.x - a.x) * t;
-        const z = a.z + (b.z - a.z) * t;
-        const ll = projection.locationToLatLng(x, Y_FOR_DISPLAY, z);
-        return makeLabelMarker(ll, text, 'center', withDot);
-      }
-      acc += seg;
-    }
-    const last = r.coords3[r.coords3.length - 1];
-    return makeLabelMarker(projection.locationToLatLng(last.x, Y_FOR_DISPLAY, last.z), text, 'center', withDot);
-  }
-
-  // Polygon：几何中心 / bbox 中心兜底
-  if (r.coords3.length < 3) return null;
+  if (!r.coords3 || r.coords3.length < 3) return null;
   const polyXZ = r.coords3.map(p => ({ x: p.x, z: p.z }));
   const c = polygonCentroidXZ(polyXZ) ?? {
     x: (Math.min(...polyXZ.map(p => p.x)) + Math.max(...polyXZ.map(p => p.x))) / 2,
     z: (Math.min(...polyXZ.map(p => p.z)) + Math.max(...polyXZ.map(p => p.z))) / 2,
   };
   const ll = projection.locationToLatLng(c.x, Y_FOR_DISPLAY, c.z);
-  return makeLabelMarker(ll, text, placement, withDot);
+  return makeLabelMarker(ll, text, labelPlan.placement ?? 'center');
 }
-
