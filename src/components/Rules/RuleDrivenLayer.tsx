@@ -9,6 +9,10 @@ import { RULE_DATA_SOURCES } from './ruleDataSources';
 import { FeatureStore } from './featureStore';
 import { DEFAULT_FLOOR_VIEW, buildFeatureMeta, findFirstRule, toZoomLevel, type FeatureRecord, type GeoType, type RenderContext } from './renderRules';
 
+const FLOOR_VIEW_MIN_LEVEL = Math.max(0, DEFAULT_FLOOR_VIEW.minLevel - 1);
+
+
+
 type Props = {
   mapReady: boolean;
   map: L.Map;
@@ -219,6 +223,9 @@ export default function RuleDrivenLayer(props: Props) {
   // 让 React 能感知 Leaflet 的 zoom/move（否则 ctx/showFloorUI 可能停留在旧值）
 const [leafletZoomState, setLeafletZoomState] = useState<number>(() => map.getZoom());
 
+const [dataVersion, setDataVersion] = useState(0);
+
+
 useEffect(() => {
   if (!mapReady) return;
 
@@ -234,64 +241,69 @@ useEffect(() => {
 }, [mapReady, map]);
 
 
-  // (1) 加载数据（worldId + dataSources）
-  useEffect(() => {
-    let cancelled = false;
+// (1) 加载数据（worldId + dataSources）
+useEffect(() => {
+  let cancelled = false;
 
-    async function load() {
-      if (!mapReady) return;
-      const ds = RULE_DATA_SOURCES[worldId];
-      if (!ds || ds.files.length === 0) {
-        recordsRef.current = [];
-        storeRef.current = new FeatureStore([]);
-        setFloorOptions([]);
-        setActiveBuildingUid(null);
-        setActiveBuildingFloorRefSet(null);
-        setActiveBuildingName('');
-        return;
-      }
-
-      const all: FeatureRecord[] = [];
-      for (const file of ds.files) {
-        const url = `${ds.baseUrl.replace(/\/$/, '')}/${file}`;
-        try {
-          const items = await fetchJsonArray(url);
-          all.push(...buildRecordsFromJson(items, file));
-        } catch (e) {
-          // 单文件失败不阻塞其余文件
-          console.warn(`[RuleDrivenLayer] failed to load ${url}`, e);
-        }
-      }
-
-      if (cancelled) return;
-      recordsRef.current = all;
-      const store = new FeatureStore(all);
-      storeRef.current = store;
-
-      // (2) 重复 key 排查：Class|idField=idValue
-      const dups = store.buildDuplicateKeyReport();
-      if (dups.length) {
-        console.warn('[RuleDrivenLayer] duplicate Class+ID keys detected:', dups.map(d => d.dupKey));
-        for (const d of dups) console.warn('[RuleDrivenLayer] dupKey detail:', d);
-      }
-
-      // 新数据 → 清空缓存，让渲染逻辑重新建 layer（避免旧 layer 残留）
-      cacheRef.current.clear();
-      rootRef.current?.clearLayers();
-
-      // 重置楼层态
+  async function load() {
+    if (!mapReady) return;
+    const ds = RULE_DATA_SOURCES[worldId];
+    if (!ds || ds.files.length === 0) {
+      recordsRef.current = [];
+      storeRef.current = new FeatureStore([]);
       setFloorOptions([]);
       setActiveBuildingUid(null);
       setActiveBuildingFloorRefSet(null);
       setActiveBuildingName('');
-      setActiveFloorIndex(0);
+      return;
     }
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [mapReady, worldId]);
+    const all: FeatureRecord[] = [];
+    for (const file of ds.files) {
+      const url = `${ds.baseUrl.replace(/\/$/, '')}/${file}`;
+      try {
+        const items = await fetchJsonArray(url);
+        all.push(...buildRecordsFromJson(items, file));
+      } catch (e) {
+        // 单文件失败不阻塞其余文件
+        console.warn(`[RuleDrivenLayer] failed to load ${url}`, e);
+      }
+    }
+
+    if (cancelled) return;
+    recordsRef.current = all;
+    const store = new FeatureStore(all);
+    storeRef.current = store;
+
+    // (2) 重复 key 排查：Class|idField=idValue
+    const dups = store.buildDuplicateKeyReport();
+    if (dups.length) {
+      console.warn('[RuleDrivenLayer] duplicate Class+ID keys detected:', dups.map(d => d.dupKey));
+      for (const d of dups) console.warn('[RuleDrivenLayer] dupKey detail:', d);
+    }
+
+    // 新数据 → 清空缓存，让渲染逻辑重新建 layer（避免旧 layer 残留）
+    cacheRef.current.clear();
+    rootRef.current?.clearLayers();
+
+    // 重置楼层态
+    setFloorOptions([]);
+    setActiveBuildingUid(null);
+    setActiveBuildingFloorRefSet(null);
+    setActiveBuildingName('');
+    setActiveFloorIndex(0);
+
+    // ✅ 关键：用 state 告诉 React “数据已就绪”
+    // ref 写入不会触发 (4)/(5) 重新跑；重启服务后常出现“数据读到但楼层/图层不刷新”
+    setDataVersion(v => v + 1);
+  }
+
+  load();
+  return () => {
+    cancelled = true;
+  };
+}, [mapReady, worldId]);
+
 
   // (3) 总开关：挂载/卸载 root layerGroup
   useEffect(() => {
@@ -316,7 +328,8 @@ useEffect(() => {
     worldId,
     leafletZoom,
     zoomLevel,
-    inFloorView: zoomLevel >= DEFAULT_FLOOR_VIEW.minLevel,
+    //inFloorView: zoomLevel >= DEFAULT_FLOOR_VIEW.minLevel,
+    inFloorView: zoomLevel >= FLOOR_VIEW_MIN_LEVEL,
     activeBuildingUid,
     activeFloorSelector: floorOptions[activeFloorIndex]?.value ?? null,
     activeBuildingFloorRefSet,
@@ -333,7 +346,9 @@ useEffect(() => {
     const updateActiveBuilding = () => {
       const leafletZoom = map.getZoom();
       const zoomLevel = toZoomLevel(leafletZoom);
-      const inFloorView = zoomLevel >= DEFAULT_FLOOR_VIEW.minLevel;
+      //const inFloorView = zoomLevel >= DEFAULT_FLOOR_VIEW.minLevel;
+      const inFloorView = zoomLevel >= FLOOR_VIEW_MIN_LEVEL;
+
 
       if (!inFloorView) {
         setActiveBuildingUid(null);
@@ -433,7 +448,8 @@ setActiveBuildingName(
       map.off('moveend', updateActiveBuilding);
       map.off('zoomend', updateActiveBuilding);
     };
-  }, [mapReady, map, projection, activeBuildingUid]);
+}, [mapReady, map, projection, activeBuildingUid, dataVersion]);
+
 
   // (5) 渲染：根据规则 + zoom + bounds + floor context 进行增量 add/remove
   useEffect(() => {
@@ -538,7 +554,8 @@ setActiveBuildingName(
       map.off('moveend', refresh);
       map.off('zoomend', refresh);
     };
-  }, [mapReady, visible, map, projection, worldId, activeBuildingUid, activeBuildingFloorRefSet, floorOptions, activeFloorIndex]);
+  }, [mapReady, visible, map, projection, worldId, activeBuildingUid, activeBuildingFloorRefSet, floorOptions, activeFloorIndex, dataVersion]);
+
 
   const showFloorUI = ctx.inFloorView && !!activeBuildingUid && floorOptions.length > 0 && visible;
 
