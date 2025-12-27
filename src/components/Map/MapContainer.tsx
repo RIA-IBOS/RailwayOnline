@@ -36,6 +36,10 @@ import RuleLayerToggle from '@/components/Rules/RuleLayerToggle';
 
 import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/GridSnapModeSwitch';
 
+import Navigation2Toggle from '../Navigation/Navigation2Toggle';
+import { NavigationPanel2 } from '../Navigation/Navigation_2';
+
+
 
 
 // 世界配置
@@ -62,6 +66,7 @@ function MapContainer() {
   const [dimBackground, setDimBackground] = useState(savedSettings?.dimBackground ?? false);
   const [mapStyle, setMapStyle] = useState<MapStyle>(savedSettings?.mapStyle ?? 'default');
   const [showNavigation, setShowNavigation] = useState(false);
+  const [showNavigation2, setShowNavigation2] = useState(false);
   const [showLinesPage, setShowLinesPage] = useState(false);
   const [showPlayersPage, setShowPlayersPage] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -85,15 +90,18 @@ function MapContainer() {
   const [showRuleLayers, setShowRuleLayers] = useState(true);
 
   // 面板 z-index 管理（用于置顶）
-  const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
-    navigation: 1001,
-    players: 1001,
-    about: 1001,
-    settings: 1001,
-    lineDetail: 1001,
-    pointDetail: 1001,
-    playerDetail: 1001,
-  });
+const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
+  info: 1000,
+  navigation: 1001,
+  navigation2: 1001,
+  help: 1000,
+  ruler: 1001,
+  mapStyle: 1001,
+  dynmap: 1001,
+  ruleLayers: 1001,
+  music: 1001,
+});
+
   const zIndexCounterRef = useRef(1001);
 
   // 置顶面板
@@ -545,6 +553,12 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
         />
       )}
 
+      <Navigation2Toggle
+      active={showNavigation2}
+      onToggle={() => setShowNavigation2(v => !v)}
+      />
+
+
       {/* 铁路图层 - 有路径规划结果时隐藏 */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
         <RailwayLayer
@@ -640,6 +654,17 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
               }}
             />
           )}
+
+          {showNavigation2 && (
+  <div className="fixed inset-0 z-[2000] bg-black/30 flex items-start justify-center pt-16">
+    <NavigationPanel2
+      worldId={currentWorld}
+      onRouteFound={handleRouteFound}
+      onClose={() => setShowNavigation2(false)}
+    />
+  </div>
+)}
+
 
           {/* 线路详情卡片 */}
           {highlightedLine && (
@@ -774,6 +799,17 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
           />
         </DraggablePanel>
       )}
+
+      {showNavigation2 && (
+  <div className="fixed inset-0 z-[2000] bg-black/30 flex items-start justify-center pt-16">
+    <NavigationPanel2
+      worldId={currentWorld}
+      onRouteFound={handleRouteFound}
+      onClose={() => setShowNavigation2(false)}
+    />
+  </div>
+)}
+
 
       {/* 玩家列表面板 */}
       {showPlayersPage && (
