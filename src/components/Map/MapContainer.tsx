@@ -8,7 +8,7 @@ import { createWatercolorTileLayer } from '@/lib/SketchTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
 import { PlayerLayer } from './PlayerLayer';
-import { RouteHighlightLayer } from './RouteHighlightLayer';
+import { RouteHighlightLayer, type RouteHighlightData } from './RouteHighlightLayer';
 import { LineHighlightLayer } from './LineHighlightLayer';
 import { WorldSwitcher } from './WorldSwitcher';
 import { SearchBar } from '../Search/SearchBar';
@@ -75,7 +75,12 @@ function MapContainer() {
   const [lines, setLines] = useState<ParsedLine[]>([]);
   const [landmarks, setLandmarks] = useState<ParsedLandmark[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [routePath, setRoutePath] = useState<Array<{ coord: Coordinate }> | null>(null);
+  const [routeHighlight, setRouteHighlight] = useState<RouteHighlightData | null>(null);
+
+// 是否存在可绘制的路线（用于隐藏图层/显示清除按钮）
+  const hasRoute =
+    routeHighlight?.styledSegments?.some(s => Array.isArray(s.coords) && s.coords.length >= 2) ?? false;
+
   const [highlightedLine, setHighlightedLine] = useState<ParsedLine | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<{
     type: 'station' | 'landmark';
@@ -224,8 +229,9 @@ if (mapStyle === 'sketch') {
     fetchPlayers(currentWorld).then(setPlayers);
 
     // 清除之前的路径
-    setRoutePath(null);
+    setRouteHighlight(null);
     setHighlightedLine(null);
+
   }, [currentWorld, dataLoaded, getWorldData]);
 
   // 搜索结果选中处理
@@ -242,7 +248,7 @@ if (mapStyle === 'sketch') {
   const handleLineSelect = useCallback((line: ParsedLine) => {
     if (!showRailway) setShowRailway(true);
     setHighlightedLine(line);
-    setRoutePath(null);  // 清除路径规划
+    setRouteHighlight(null);  // 清除路径规划
     setSelectedPoint(null);  // 清除点位选中
 
     const map = leafletMapRef.current;
@@ -328,20 +334,39 @@ if (mapStyle === 'sketch') {
   }, [stations, landmarks]);
 
   // 导航路径找到时的处理
-  const handleRouteFound = useCallback((path: Array<{ coord: Coordinate }>) => {
-    setRoutePath(path);
-    setHighlightedLine(null);  // 清除线路高亮
+const handleRouteFound = useCallback((route: RouteHighlightData | Array<{ coord: Coordinate }>) => {
+  setHighlightedLine(null); // 清除线路高亮
 
-    // 计算路径边界并调整地图视图
-    const map = leafletMapRef.current;
-    const proj = projectionRef.current;
-    if (!map || !proj || path.length === 0) return;
+  // 统一归一化为 RouteHighlightData
+  let rh: RouteHighlightData | null = null;
 
-    const bounds = L.latLngBounds(
-      path.map(p => proj.locationToLatLng(p.coord.x, p.coord.y || 64, p.coord.z))
-    );
-    map.fitBounds(bounds, { padding: [50, 50] });
-  }, []);
+  if (Array.isArray(route)) {
+    const coords = route.map(p => p.coord).filter(Boolean);
+    rh = coords.length >= 2 ? { styledSegments: [{ kind: 'generic', coords }] } : null;
+  } else {
+    rh = route;
+  }
+
+  setRouteHighlight(rh);
+
+  // 计算边界并调整视图
+  const map = leafletMapRef.current;
+  const proj = projectionRef.current;
+  if (!map || !proj || !rh?.styledSegments?.length) return;
+
+  const allCoords: Coordinate[] = [];
+  for (const seg of rh.styledSegments) {
+    if (!Array.isArray(seg.coords)) continue;
+    for (const c of seg.coords) allCoords.push(c);
+  }
+  if (allCoords.length === 0) return;
+
+  const bounds = L.latLngBounds(
+    allCoords.map(c => proj.locationToLatLng(c.x, c.y || 64, c.z))
+  );
+  map.fitBounds(bounds, { padding: [50, 50] });
+}, []);
+
 
   // 世界切换处理
   const handleWorldChange = useCallback((worldId: string) => {
@@ -565,7 +590,7 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showRailway && !routePath}
+          visible={showRailway && !hasRoute}
           mapStyle={mapStyle}
           onStationClick={handleStationClick}
         />
@@ -577,7 +602,7 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showLandmark && !routePath}
+          visible={showLandmark && !hasRoute}
           onLandmarkClick={handleLandmarkClick}
         />
       )}
@@ -735,17 +760,18 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
         </div>
 
         {/* 清除路径按钮 */}
-        {routePath && routePath.length > 0 && (
-          <button
-            onClick={() => setRoutePath(null)}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <span>清除路径</span>
-          </button>
-        )}
+{hasRoute && (
+  <button
+    onClick={() => setRouteHighlight(null)}
+    className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
+  >
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+    <span>清除路径</span>
+  </button>
+)}
+
       </div>
 
       {/* 桌面端：可拖拽浮动面板 */}
@@ -922,13 +948,14 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
       </div>
 
       {/* 路径高亮图层 */}
-      {mapReady && leafletMapRef.current && projectionRef.current && routePath && routePath.length > 0 && (
-        <RouteHighlightLayer
-          map={leafletMapRef.current}
-          projection={projectionRef.current}
-          path={routePath}
-        />
-      )}
+{mapReady && leafletMapRef.current && projectionRef.current && hasRoute && routeHighlight && (
+  <RouteHighlightLayer
+    map={leafletMapRef.current}
+    projection={projectionRef.current}
+    route={routeHighlight}
+  />
+)}
+
 
       {/* 线路高亮图层 */}
       {mapReady && leafletMapRef.current && projectionRef.current && highlightedLine && showRailway && (

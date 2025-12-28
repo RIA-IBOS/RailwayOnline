@@ -1,10 +1,10 @@
 [
   {
     "LineID": "ZRT4_01C_U",
-    "LineName": "溯铁4号线-上行",
+    "LineName": "溯铁4号线岭澜段-上行",
     "bureau": "T",
     "line": "4",
-    "color": "FCEE21",
+    "color": "FFD700",
     "direction": 1,
     "startplf": "新桥",
     "endplf": "岭上神社",
