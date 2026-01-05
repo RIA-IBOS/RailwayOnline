@@ -10,6 +10,8 @@ import { fetchRailwayData, parseRailwayData, getBureauName } from '@/lib/railway
 import { fetchRMPData, parseRMPData } from '@/lib/rmpParser';
 import { DynmapProjection } from '@/lib/DynmapProjection';
 import type { MapStyle } from '@/lib/cookies';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 /**
  * 采样二次贝塞尔曲线为折线点
@@ -318,22 +320,22 @@ export function RailwayControl({
   }, {} as Record<string, ParsedLine[]>);
 
   return (
-    <div className="railway-control bg-white rounded-lg shadow-lg p-3 max-h-80 overflow-y-auto">
+    <AppCard className="railway-control p-3 max-h-80 overflow-y-auto">
       <div className="flex justify-between items-center mb-2">
         <h3 className="font-bold text-sm">铁路线路</h3>
         <div className="flex gap-1">
-          <button
+          <AppButton
             className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
             onClick={() => onToggleAll(true)}
           >
             全选
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             className="text-xs px-2 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
             onClick={() => onToggleAll(false)}
           >
             全不选
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -344,7 +346,7 @@ export function RailwayControl({
           </div>
           <div className="flex flex-wrap gap-1">
             {bureauLines.map(line => (
-              <button
+              <AppButton
                 key={line.lineId}
                 className={`text-xs px-2 py-1 rounded transition-colors ${
                   visibleLines.has(line.lineId)
@@ -359,12 +361,12 @@ export function RailwayControl({
                 onClick={() => onToggleLine(line.lineId)}
               >
                 {line.lineId}
-              </button>
+              </AppButton>
             ))}
           </div>
         </div>
       ))}
-    </div>
+    </AppCard>
   );
 }
 

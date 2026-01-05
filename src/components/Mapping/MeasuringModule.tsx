@@ -20,6 +20,7 @@ import {
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
 import { Pencil, Upload, Trash2, X } from 'lucide-react';
+import ToolIconButton from '@/components/Toolbar/ToolIconButton';
 
 import ControlPointsT, { type ControlPointsTHandle } from '@/components/Mapping/ControlPointsT';
 
@@ -56,6 +57,8 @@ import WorkflowHost, {
 } from '@/components/Mapping/Workflow/WorkflowHost';
 import RailwayWorkflow from '@/components/Mapping/Workflow/RailwayWorkflow';
 import StationWorkflow from '@/components/Mapping/Workflow/StationWorkflow';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 
 
@@ -1792,13 +1795,13 @@ const renderDynamicExtraInfo = () => {
               <div key={g.key} className="border rounded p-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-semibold">{g.label}</div>
-                  <button
+                  <AppButton
                     className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
                     onClick={() => setGroupItems(g.key, [...items, makeEmptyItem(g.fields)])}
                     type="button"
                   >
                     {g.addButtonText ?? '添加'}
-                  </button>
+                  </AppButton>
                 </div>
 
                 {items.length === 0 ? (
@@ -1809,13 +1812,13 @@ const renderDynamicExtraInfo = () => {
                       <div key={idx} className="border rounded p-2">
                         <div className="flex items-center justify-between mb-2">
                           <div className="text-xs font-semibold">#{idx + 1}</div>
-                          <button
+                          <AppButton
                             className="bg-red-600 text-white px-2 py-1 rounded text-xs"
                             onClick={() => setGroupItems(g.key, items.filter((_, i) => i !== idx))}
                             type="button"
                           >
                             删除
-                          </button>
+                          </AppButton>
                         </div>
 
                         <div>
@@ -2172,83 +2175,78 @@ return (
       {/* 右侧工具按钮：测绘（图标 + 下拉） */}
       <div className="absolute bottom-8 right-14 sm:top-4 sm:bottom-auto sm:right-[316px] z-[1001]">
         <div className="relative">
-          <button
+          <ToolIconButton
+            label="测绘"
+            icon={<Pencil className="w-5 h-5" />}
+            active={measuringActive}
+            tone="blue"
+            shadow
             onClick={toggleMeasureDropdown}
-            className={`relative group flex flex-col items-center p-2 rounded-lg transition-colors ${
-              measuringActive ? 'bg-blue-50 text-blue-600' : 'bg-white/90 text-gray-700 hover:bg-gray-100'
-            } shadow-lg`}
-            title="测绘"
-            type="button"
-          >
-            <Pencil className="w-5 h-5" />
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-              测绘
-            </span>
-          </button>
+          />
 
           {/* 下拉菜单：仅再次点击“测绘”按钮才收回 */}
-          <div
-            className={`absolute right-0 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 transition-all duration-150 sm:mt-2 sm:top-full sm:origin-top-right max-md:bottom-full max-md:mb-2 max-md:origin-bottom-right ${
+          <AppCard
+            className={`absolute right-0 w-44 border border-gray-200 py-1 z-50 transition-all duration-150 sm:mt-2 sm:top-full sm:origin-top-right max-md:bottom-full max-md:mb-2 max-md:origin-bottom-right ${
               measureDropdownOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
             }`}
           >
 {/* 开始测绘（完整/快捷） 或 结束测绘 */}
 {!measuringActive ? (
   <>
-    <button
+    <AppButton
       onClick={() => startMeasuringFromMenu('full')}
       className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
       type="button"
     >
       <Pencil className="w-4 h-4" />
       <span>开始测绘(完整)</span>
-    </button>
+    </AppButton>
 
-    <button
+    <AppButton
       onClick={() => startMeasuringFromMenu('workflow')}
       className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
       type="button"
     >
       <Pencil className="w-4 h-4" />
       <span>开始测绘(快捷)</span>
-    </button>
+    </AppButton>
   </>
 ) : (
-  <button
+  <AppButton
     onClick={endMeasuringFromMenu}
     className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
     type="button"
   >
     <X className="w-4 h-4" />
     <span className="font-medium">结束测绘</span>
-  </button>
+  </AppButton>
 )}
 
 
             {/* 导入数据 */}
             {/* 导入数据：仅开始测绘后显示 */}
 {measuringActive && (
-  <button
+  <AppButton
     onClick={() => setImportPanelOpen(true)}
     className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
     type="button"
   >
     <Upload className="w-4 h-4" />
     <span>导入数据</span>
-  </button>
+  </AppButton>
 )}
 
 
             {/* 清空所有图层 */}
-            <button
+            <AppButton
               onClick={clearAllLayers}
               className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
               type="button"
             >
               <Trash2 className="w-4 h-4" />
               <span>清空所有图层</span>
-            </button>
-          </div>
+            </AppButton>
+          </AppCard>
         </div>
       </div>
 
@@ -2258,18 +2256,18 @@ return (
       {measuringActive && (
         <div className="hidden sm:block">
           <DraggablePanel id="measuring-main" defaultPosition={{ x: 16, y: 240 }} zIndex={1800}>
-            <div className="bg-white rounded-xl shadow-lg w-96 max-h-[70vh] overflow-hidden border">
+            <AppCard className="w-96 max-h-[70vh] overflow-hidden border">
               {/* 标题栏（拖拽区域） */}
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-bold text-gray-800">测绘</h3>
-                <button
+                <AppButton
                   onClick={closeMeasuringUI}
                   className="text-gray-400 hover:text-gray-600"
                   aria-label="关闭"
                   type="button"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </AppButton>
               </div>
 
               {/* 内容区 */}
@@ -2279,14 +2277,14 @@ return (
 {measuringVariant === 'full' ? (
   <div className="flex gap-2 mb-2">
     {(['point', 'polyline', 'polygon'] as const).map((m) => (
-      <button
+      <AppButton
         key={m}
         className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
         onClick={() => handleDrawModeButtonClick(m)}
         type="button"
       >
         {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
-      </button>
+      </AppButton>
     ))}
   </div>
 ) : (
@@ -2301,23 +2299,23 @@ return (
       <option value="station">车站和站台</option>
     </select>
 
-    <button
+    <AppButton
       className={`px-3 py-1 rounded border ${workflowRunning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
       type="button"
       disabled={workflowRunning}
       onClick={startWorkflow}
     >
       开始
-    </button>
+    </AppButton>
 
-    <button
+    <AppButton
       className={`px-3 py-1 rounded border ${!workflowRunning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
       type="button"
       disabled={!workflowRunning}
       onClick={stopWorkflowToSelector}
     >
       结束
-    </button>
+    </AppButton>
   </div>
 )}
 
@@ -2371,21 +2369,21 @@ onChange={(e) => {
 
 {drawMode !== 'none' && (
   <div className="flex gap-2 mb-2">
-    <button className="bg-yellow-400 text-white px-2 py-1 rounded flex-1" onClick={handleUndo} type="button">
+    <AppButton className="bg-yellow-400 text-white px-2 py-1 rounded flex-1" onClick={handleUndo} type="button">
       撤销
-    </button>
-    <button className="bg-orange-400 text-white px-2 py-1 rounded flex-1" onClick={handleRedo} type="button">
+    </AppButton>
+    <AppButton className="bg-orange-400 text-white px-2 py-1 rounded flex-1" onClick={handleRedo} type="button">
       重做
-    </button>
+    </AppButton>
 
     {measuringVariant === 'full' && (
-      <button
+      <AppButton
         className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1"
         onClick={finishLayer}
         type="button"
       >
         {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
-      </button>
+      </AppButton>
     )}
   </div>
 )}
@@ -2393,7 +2391,7 @@ onChange={(e) => {
 
 {/* 显示控制点 / 显示坐标：始终可见（坐标按钮仍只在开启后显示） */}
 <div className="flex gap-2 mb-2">
-  <button
+  <AppButton
     type="button"
     className={`flex-1 px-2 py-1 rounded text-sm border ${
       showDraftControlPoints ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
@@ -2410,10 +2408,10 @@ onChange={(e) => {
     title={showDraftControlPointsLocked ? '控制点修改/添加中：显示控制点已锁定开启' : '显示/隐藏控制点'}
   >
     显示控制点
-  </button>
+  </AppButton>
 
   {showDraftControlPoints && (
-    <button
+    <AppButton
       type="button"
       className={`flex-1 px-2 py-1 rounded text-sm border ${
         showDraftControlPointCoords ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
@@ -2422,7 +2420,7 @@ onChange={(e) => {
       title="显示/隐藏控制点坐标"
     >
       显示坐标
-    </button>
+    </AppButton>
   )}
 </div>
 
@@ -2514,7 +2512,7 @@ onChange={(e) => {
     <div className="mb-2">
       <div className="flex items-center justify-between">
         <label className="text-sm font-bold">临时输出</label>
-        <button
+        <AppButton
           type="button"
           className={`px-2 py-1 text-xs rounded border ${
             tempOutputOpen ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
@@ -2522,7 +2520,7 @@ onChange={(e) => {
           onClick={() => setTempOutputOpen(v => !v)}
         >
           {tempOutputOpen ? '收起' : '展开'}
-        </button>
+        </AppButton>
       </div>
 
       {tempOutputOpen && (
@@ -2551,7 +2549,7 @@ onChange={(e) => {
       <div className="flex items-center gap-2">
         {/* 点：站台 -> 多点合一 */}
         {drawMode === 'point' && subType === '站台' && (
-          <button
+          <AppButton
             type="button"
             className={`px-2 py-1 text-xs rounded border ${
               specialDraftMode === 'merge-point-platform-station'
@@ -2571,7 +2569,7 @@ onChange={(e) => {
             }}
           >
             多点合一
-          </button>
+          </AppButton>
         )}
 
         {/* 线：铁路 -> 方向反转（>=2 控制点） */}
@@ -2598,7 +2596,7 @@ onChange={(e) => {
 
         {/* 面：站台轮廓/车站建筑 -> 多面合一 */}
         {drawMode === 'polygon' && (String(subType) === '站台轮廓' || subType === '车站建筑') && (
-          <button
+          <AppButton
             type="button"
             className={`px-2 py-1 text-xs rounded border ${
               specialDraftMode === 'merge-polygon-outline-building'
@@ -2617,7 +2615,7 @@ onChange={(e) => {
             }}
           >
             多面合一
-          </button>
+          </AppButton>
         )}
       </div>
     </div>
@@ -2642,7 +2640,7 @@ onChange={(e) => {
 )}
 
               </div>
-            </div>
+            </AppCard>
           </DraggablePanel>
         </div>
       )}
@@ -2650,30 +2648,30 @@ onChange={(e) => {
       {/* 测绘菜单：手机端（固定布局，风格一致） */}
       {measuringActive && (
         <div className="sm:hidden fixed top-[240px] left-2 right-2 z-[1800]">
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden border max-h-[70vh]">
+          <AppCard className="overflow-hidden border max-h-[70vh]">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-bold text-gray-800">测绘</h3>
-              <button
+              <AppButton
                 onClick={closeMeasuringUI}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="关闭"
                 type="button"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
 
             <div className="p-3 overflow-y-auto max-h-[calc(70vh-48px)]">
               <div className="flex gap-2 mb-2">
   {(['point', 'polyline', 'polygon'] as const).map((m) => (
-    <button
+    <AppButton
       key={m}
       className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
       onClick={() => handleDrawModeButtonClick(m)}
       type="button"
     >
       {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
-    </button>
+    </AppButton>
   ))}
 </div>
 
@@ -2721,21 +2719,21 @@ onChange={(e) => {
 
 {drawMode !== 'none' && (
   <div className="flex gap-2 mb-2">
-    <button className="bg-yellow-400 text-white px-2 py-1 rounded flex-1" onClick={handleUndo} type="button">
+    <AppButton className="bg-yellow-400 text-white px-2 py-1 rounded flex-1" onClick={handleUndo} type="button">
       撤销
-    </button>
-    <button className="bg-orange-400 text-white px-2 py-1 rounded flex-1" onClick={handleRedo} type="button">
+    </AppButton>
+    <AppButton className="bg-orange-400 text-white px-2 py-1 rounded flex-1" onClick={handleRedo} type="button">
       重做
-    </button>
+    </AppButton>
 
     {measuringVariant === 'full' && (
-      <button
+      <AppButton
         className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1"
         onClick={finishLayer}
         type="button"
       >
         {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
-      </button>
+      </AppButton>
     )}
   </div>
 )}
@@ -2804,7 +2802,7 @@ onChange={(e) => {
     <div className="mb-2">
       <div className="flex items-center justify-between">
         <label className="text-sm font-bold">临时输出</label>
-        <button
+        <AppButton
           type="button"
           className={`px-2 py-1 text-xs rounded border ${
             tempOutputOpen ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
@@ -2812,7 +2810,7 @@ onChange={(e) => {
           onClick={() => setTempOutputOpen(v => !v)}
         >
           {tempOutputOpen ? '收起' : '展开'}
-        </button>
+        </AppButton>
       </div>
 
       {tempOutputOpen && (
@@ -2840,7 +2838,7 @@ onChange={(e) => {
       <div className="flex items-center gap-2">
         {/* 点：站台 -> 多点合一 */}
         {drawMode === 'point' && subType === '站台' && (
-          <button
+          <AppButton
             type="button"
             className={`px-2 py-1 text-xs rounded border ${
               specialDraftMode === 'merge-point-platform-station'
@@ -2860,7 +2858,7 @@ onChange={(e) => {
             }}
           >
             多点合一
-          </button>
+          </AppButton>
         )}
 
         {/* 线：铁路 -> 方向反转（>=2 控制点） */}
@@ -2887,7 +2885,7 @@ onChange={(e) => {
 
         {/* 面：站台轮廓/车站建筑 -> 多面合一 */}
         {drawMode === 'polygon' && (String(subType) === '站台轮廓' || subType === '车站建筑') && (
-          <button
+          <AppButton
             type="button"
             className={`px-2 py-1 text-xs rounded border ${
               specialDraftMode === 'merge-polygon-outline-building'
@@ -2906,7 +2904,7 @@ onChange={(e) => {
             }}
           >
             多面合一
-          </button>
+          </AppButton>
         )}
       </div>
     </div>
@@ -2931,7 +2929,7 @@ onChange={(e) => {
 )}
 
             </div>
-          </div>
+          </AppCard>
         </div>
       )}
 
@@ -2941,17 +2939,17 @@ onChange={(e) => {
       {importPanelOpen && (
         <div className="hidden sm:block">
           <DraggablePanel id="measuring-import" defaultPosition={{ x: 16, y: 520 }} zIndex={1800}>
-            <div className="bg-white rounded-xl shadow-lg w-96 overflow-hidden border">
+            <AppCard className="w-96 overflow-hidden border">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-bold text-gray-800">导入矢量数据</h3>
-                <button
+                <AppButton
                   onClick={() => setImportPanelOpen(false)}
                   className="text-gray-400 hover:text-gray-600"
                   aria-label="关闭"
                   type="button"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </AppButton>
               </div>
 
               <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
@@ -2994,11 +2992,11 @@ placeholder={
                   rows={6}
                 />
 
-                <button className="bg-green-600 text-white px-3 py-2 rounded-lg w-full" onClick={handleImport} type="button">
+                <AppButton className="bg-green-600 text-white px-3 py-2 rounded-lg w-full" onClick={handleImport} type="button">
                   导入
-                </button>
+                </AppButton>
               </div>
-            </div>
+            </AppCard>
           </DraggablePanel>
         </div>
       )}
@@ -3006,17 +3004,17 @@ placeholder={
       {/* 导入面板：手机端（固定） */}
       {importPanelOpen && (
         <div className="sm:hidden fixed bottom-24 left-2 right-2 z-[1800]">
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden border">
+          <AppCard className="overflow-hidden border">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-bold text-gray-800">导入矢量数据</h3>
-              <button
+              <AppButton
                 onClick={() => setImportPanelOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="关闭"
                 type="button"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
 
             <div className="p-4 space-y-3">
@@ -3052,17 +3050,17 @@ placeholder={
                 rows={6}
               />
 
-              <button className="bg-green-600 text-white px-3 py-2 rounded-lg w-full" onClick={handleImport} type="button">
+              <AppButton className="bg-green-600 text-white px-3 py-2 rounded-lg w-full" onClick={handleImport} type="button">
                 导入
-              </button>
+              </AppButton>
             </div>
-          </div>
+          </AppCard>
         </div>
       )}
 
 {/* ======== 图层控制器 ======== */}
 {measuringActive && (
-  <div className="fixed top-20 right-4 bg-white p-3 rounded-lg shadow-lg z-[1000] w-85 max-h-[70vh] overflow-y-auto">
+  <AppCard className="fixed top-20 right-4 p-3 z-[1000] w-85 max-h-[70vh] overflow-y-auto">
     {(() => {
       const busy = (drawing && drawMode !== 'none') || editingLayerId !== null;
       const visibleList = layers.filter((l) => l.id !== editingLayerId); // 编辑中的层在列表隐藏
@@ -3072,7 +3070,7 @@ placeholder={
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-bold">测绘图层</h3>
 
-            <button
+            <AppButton
               type="button"
               className={`px-2 py-1 text-sm rounded border ${
                 busy || visibleList.length === 0
@@ -3094,28 +3092,28 @@ placeholder={
               }}
             >
               整体JSON
-            </button>
+            </AppButton>
           </div>
 
           {visibleList.map((l) => (
             <div key={l.id} className="flex items-center gap-1 mb-1">
-              <button
+              <AppButton
                 className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
                 onClick={() => toggleLayerVisible(l.id)}
                 type="button"
               >
                 {l.visible ? '隐藏' : '显示'}
-              </button>
+              </AppButton>
 
-              <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
+              <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
                 ↑
-              </button>
+              </AppButton>
 
-              <button className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
+              <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
                 ↓
-              </button>
+              </AppButton>
 
-              <button
+              <AppButton
                 className={`px-2 py-1 text-sm ${
                   busy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
                 }`}
@@ -3128,13 +3126,13 @@ placeholder={
                 title={busy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
               >
                 编辑
-              </button>
+              </AppButton>
 
-              <button className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
+              <AppButton className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
                 删除
-              </button>
+              </AppButton>
 
-              <button
+              <AppButton
                 className="px-3 py-1 text-sm bg-purple-400 text-white"
                 onClick={() => {
                   setJsonPanelText(getLayerJSONOutput(l));
@@ -3143,7 +3141,7 @@ placeholder={
                 type="button"
               >
                 JSON
-              </button>
+              </AppButton>
 
               <div className="flex-1 text-sm truncate">
                 #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
@@ -3153,24 +3151,24 @@ placeholder={
         </>
       );
     })()}
-  </div>
+  </AppCard>
 )}
 
 
       {/* ======== JSON 导出窗口（替代 alert/print） ======== */}
 {measuringActive && jsonPanelOpen && (
   <DraggablePanel id="measuring-json-export" defaultPosition={{ x: 340, y: 260 }} zIndex={1900}>
-    <div className="bg-white rounded-xl shadow-lg w-[520px] max-h-[70vh] overflow-hidden border">
+    <AppCard className="w-[520px] max-h-[70vh] overflow-hidden border">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="font-bold text-gray-800">JSON 导出</h3>
-        <button
+        <AppButton
           onClick={() => setJsonPanelOpen(false)}
           className="text-gray-400 hover:text-gray-600"
           aria-label="关闭"
           type="button"
         >
           <X className="w-5 h-5" />
-        </button>
+        </AppButton>
       </div>
 
       <div className="p-3 space-y-2">
@@ -3181,7 +3179,7 @@ placeholder={
         />
 
         <div className="flex gap-2">
-          <button
+          <AppButton
             className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg"
             onClick={async () => {
               const text = jsonPanelText ?? '';
@@ -3206,24 +3204,24 @@ placeholder={
             type="button"
           >
             复制
-          </button>
+          </AppButton>
 
-          <button
+          <AppButton
             className="flex-1 bg-gray-200 text-gray-800 px-3 py-2 rounded-lg"
             onClick={() => setJsonPanelOpen(false)}
             type="button"
           >
             关闭
-          </button>
+          </AppButton>
         </div>
       </div>
-    </div>
+    </AppCard>
   </DraggablePanel>
 )}
 
 {switchWarnOpen && (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
-    <div className="w-[420px] max-w-[90vw] rounded-lg bg-white shadow-lg border">
+    <AppCard className="w-[420px] max-w-[90vw] border">
       <div className="px-4 py-3 border-b font-bold text-sm">
         切换确认
       </div>
@@ -3231,49 +3229,49 @@ placeholder={
         特殊要素格式附加信息不为空，切换将会丢失所有信息，确定要切换吗？
       </div>
       <div className="px-4 py-3 border-t flex justify-end gap-2">
-        <button
+        <AppButton
           type="button"
           className="px-3 py-1.5 rounded border bg-white text-gray-800 hover:bg-gray-50"
           onClick={cancelExtraSwitch}
         >
           取消
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           type="button"
           className="px-3 py-1.5 rounded border bg-blue-600 text-white border-blue-700 hover:bg-blue-700"
           onClick={confirmExtraSwitch}
         >
           确定
-        </button>
+        </AppButton>
       </div>
-    </div>
+    </AppCard>
   </div>
 )}
 
 {endMeasuringWarnOpen && (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
-    <div className="w-[420px] max-w-[90vw] rounded-lg bg-white shadow-lg border">
+    <AppCard className="w-[420px] max-w-[90vw] border">
       <div className="px-4 py-3 border-b font-bold text-sm">结束测绘确认</div>
       <div className="px-4 py-3 text-sm text-gray-800">
         结束测绘将清除所有测绘图层，是否确认？
       </div>
       <div className="px-4 py-3 border-t flex justify-end gap-2">
-        <button
+        <AppButton
           type="button"
           className="px-3 py-1.5 rounded border bg-white text-gray-800 hover:bg-gray-50"
           onClick={cancelEndMeasuring}
         >
           返回
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           type="button"
           className="px-3 py-1.5 rounded border bg-blue-600 text-white border-blue-700 hover:bg-blue-700"
           onClick={confirmEndMeasuring}
         >
           确认
-        </button>
+        </AppButton>
       </div>
-    </div>
+    </AppCard>
   </div>
 )}
 

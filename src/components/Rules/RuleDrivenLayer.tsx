@@ -11,6 +11,8 @@ import { RULE_DATA_SOURCES } from './ruleDataSources';
 import { FeatureStore } from './featureStore';
 import { DEFAULT_FLOOR_VIEW, buildFeatureMeta, findFirstRule, toZoomLevel, type FeatureRecord, type GeoType, type RenderContext } from './renderRules';
 import { layoutLabelsOnMap, type LabelRequest, type AvoidRectPx } from './labelLayout';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 
 const FLOOR_VIEW_MIN_LEVEL = Math.max(0, DEFAULT_FLOOR_VIEW.minLevel);
@@ -919,47 +921,16 @@ if (r.type === 'Points' && pointLatLng) {
   const showFloorUI = ctx.inFloorView && !!activeBuildingUid && floorOptions.length > 0 && visible;
 
 
-const floorUiRootRef = useRef<HTMLDivElement | null>(null);
-
-useEffect(() => {
-  const el = document.createElement('div');
-  el.id = 'floor-ui-root';
-  el.style.position = 'fixed';
-  el.style.top = '0';
-  el.style.left = '0';
-  el.style.width = '0';
-  el.style.height = '0';
-  el.style.zIndex = '2147483647';
-  document.body.appendChild(el);
-  floorUiRootRef.current = el;
-
-  return () => {
-    document.body.removeChild(el);
-    floorUiRootRef.current = null;
-  };
-}, []);
-
-console.log('[FloorUI]', {
-  showFloorUI,
-  inFloorView: ctx?.inFloorView,
-  zoomLevel: ctx?.zoomLevel,
-  activeBuildingUid,
-  floorOptionsLen: floorOptions?.length,
-  activeFloorIndex,
-  visible,
-});
-
-
   return (
     <>
       {showFloorUI && (
-        <div
-  style={{ position: 'fixed', top: 80, right: 16, zIndex: 2147483647, pointerEvents: 'auto' }}
-  className="bg-white/90 rounded-lg shadow-lg border border-gray-200 p-2 w-28"
-  onMouseDown={(e) => e.stopPropagation()}
-  onDoubleClick={(e) => e.stopPropagation()}
-  onWheel={(e) => e.stopPropagation()}
->
+        <AppCard
+          style={{ position: 'fixed', top: 80, right: 16, zIndex: 2147483647, pointerEvents: 'auto' }}
+          className="bg-white/90 border border-gray-200 p-2 w-28"
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
 
 
           <div className="text-xs font-semibold text-gray-800 mb-1">楼层视角</div>
@@ -972,7 +943,7 @@ console.log('[FloorUI]', {
             {floorOptions.map((opt, idx) => {
               const on = idx === activeFloorIndex;
               return (
-                <button
+                <AppButton
                   key={opt.value}
                   type="button"
                   onClick={() => setActiveFloorIndex(idx)}
@@ -981,11 +952,11 @@ console.log('[FloorUI]', {
                   }`}
                 >
                   {opt.label}
-                </button>
+                </AppButton>
               );
             })}
           </div>
-        </div>
+        </AppCard>
       )}
     </>
   );
@@ -1349,4 +1320,3 @@ function buildLabelLayer(
   const ll = projection.locationToLatLng(c.x, Y_FOR_DISPLAY, c.z);
   return makeLabelMarker(ll, text, placement, withDot);
 }
-

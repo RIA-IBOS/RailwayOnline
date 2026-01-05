@@ -47,6 +47,8 @@ import { findTeleportPath, extractToriiList } from '@/lib/toriiTeleport';
 import { computeRailPlanFromCoords, type NavRailNewIntegratedPlan, type TransferType } from './Navigation_RailNewIntegrated';
 import { listRailNewStaBuildingsForSearch, type RailNewStaBuildingSearchItem } from './Navigation_RailNewIntegrated';
 import type { RouteHighlightData, RouteStyledSegment, RouteStationMarker } from '@/components/Map/RouteHighlightLayer';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 
 // ---------------------------
@@ -236,9 +238,9 @@ function PointSearchInput({ value, onChange, items, placeholder, label }: PointS
       />
 
       {isOpen && filteredItems.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg max-h-48 overflow-y-auto z-50 border">
+        <AppCard className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto z-50 border">
           {filteredItems.map((item, idx) => (
-            <button
+            <AppButton
               key={`${item.type}-${item.name}-${idx}`}
               className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-50 last:border-b-0 flex items-center gap-2"
               onClick={() => handleSelect(item)}
@@ -269,9 +271,9 @@ function PointSearchInput({ value, onChange, items, placeholder, label }: PointS
               <span className="text-xs text-gray-400 ml-auto">
                 {item.type === 'station' ? '站点' : item.type === 'player' ? '玩家' : item.type === 'StaBuilding' ? '站体' : '地标'}
               </span>
-            </button>
+            </AppButton>
           ))}
-        </div>
+        </AppCard>
       )}
     </div>
   );
@@ -492,7 +494,7 @@ export function NavigationPanel({
 }: NavigationPanelProps) {
   const [startPoint, setStartPoint] = useState<SearchItem | null>(null);
   const [endPoint, setEndPoint] = useState<SearchItem | null>(null);
-  const [travelMode, setTravelMode] = useState<TravelModePanel>('rail');
+  const [travelMode, setTravelMode] = useState<TravelModePanel>('rail_new');
   const [preferLessTransfer, setPreferLessTransfer] = useState(true);
   const [useElytra, setUseElytra] = useState(true);
 
@@ -740,19 +742,19 @@ if (travelMode === 'rail_new') {
   const hasResult = !!(resultLegacy || resultRailNew);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
+    <AppCard className="w-full sm:w-72 max-h-[60vh] sm:max-h-[70vh] flex flex-col">
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <h3 className="font-bold text-gray-800">路径规划</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <AppButton onClick={onClose} className="text-gray-400 hover:text-gray-600">
           <X className="w-5 h-5" />
-        </button>
+        </AppButton>
       </div>
 
       {/* 模式选择 */}
       <div className="flex border-b">
         {TRAVEL_MODES.map(({ mode, label, icon: Icon }) => (
-          <button
+          <AppButton
             key={mode}
             className={`flex-1 py-2 px-1 flex flex-col items-center gap-0.5 text-xs transition-colors ${
               travelMode === mode
@@ -767,7 +769,7 @@ if (travelMode === 'rail_new') {
           >
             <Icon className="w-4 h-4" />
             <span>{label}</span>
-          </button>
+          </AppButton>
         ))}
       </div>
 
@@ -787,13 +789,13 @@ if (travelMode === 'rail_new') {
               label="起点"
             />
           </div>
-          <button
+          <AppButton
             onClick={handleSwap}
             className="mt-6 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
             title="交换起终点"
           >
             <ArrowUpDown className="w-4 h-4" />
-          </button>
+          </AppButton>
         </div>
 
         <div className="mb-2">
@@ -843,13 +845,13 @@ if (travelMode === 'rail_new') {
             </label>
           </div>
 
-          <button
+          <AppButton
             onClick={() => void handleSearch()}
             disabled={!startPoint || !endPoint || searching}
             className="px-4 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-xs font-medium"
           >
             {searching ? '搜索中...' : '搜索'}
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -950,14 +952,14 @@ if (travelMode === 'rail_new') {
                                 </div>
 
                                 {!isConnectorLeg && (
-  <button
+  <AppButton
     className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-gray-800 flex-shrink-0"
     onClick={() => toggleRailLegExpand(k)}
     title="展开/收起途经站"
   >
     <span>途经</span>
     {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-  </button>
+  </AppButton>
 )}
                               </div>
 
@@ -1004,13 +1006,13 @@ if (travelMode === 'rail_new') {
                             </div>
                             {leg.kind !== 'transfer' && (
   <div className="text-xs text-gray-800">
-    <button className="hover:underline" onClick={() => onPointClick?.(leg.from)}>
+    <AppButton className="hover:underline" onClick={() => onPointClick?.(leg.from)}>
       ({Math.round(leg.from.x)}, {Math.round(leg.from.z)})
-    </button>
+    </AppButton>
     <span className="text-gray-400 mx-1">→</span>
-    <button className="hover:underline" onClick={() => onPointClick?.(leg.to)}>
+    <AppButton className="hover:underline" onClick={() => onPointClick?.(leg.to)}>
       ({Math.round(leg.to.x)}, {Math.round(leg.to.z)})
-    </button>
+    </AppButton>
   </div>
 )}
                           </div>
@@ -1110,13 +1112,13 @@ if (travelMode === 'rail_new') {
                                 <span className="text-gray-400 ml-1">({formatTime(walkTime)})</span>
                               </div>
                               <div className="text-xs text-gray-800">
-                                <button className="text-green-700 hover:underline" onClick={() => onPointClick?.(segment.from)}>
+                                <AppButton className="text-green-700 hover:underline" onClick={() => onPointClick?.(segment.from)}>
                                   ({Math.round(segment.from.x)}, {Math.round(segment.from.z)})
-                                </button>
+                                </AppButton>
                                 <span className="text-gray-400 mx-1">→</span>
-                                <button className="text-green-700 hover:underline" onClick={() => onPointClick?.(segment.to)}>
+                                <AppButton className="text-green-700 hover:underline" onClick={() => onPointClick?.(segment.to)}>
                                   ({Math.round(segment.to.x)}, {Math.round(segment.to.z)})
-                                </button>
+                                </AppButton>
                               </div>
                             </div>
                           </div>
@@ -1154,19 +1156,19 @@ if (travelMode === 'rail_new') {
                                 {isReverseTP && <span className="text-gray-400 ml-1">(+30秒)</span>}
                               </div>
                               <div className="text-xs text-gray-800">
-                                <button
+                                <AppButton
                                   className="text-purple-700 hover:underline"
                                   onClick={() => onPointClick?.(isReverseTP ? segment.destination : segment.torii.coord)}
                                 >
                                   {fromName}
-                                </button>
+                                </AppButton>
                                 <span className="text-gray-400 mx-1">→</span>
-                                <button
+                                <AppButton
                                   className="text-purple-700 hover:underline"
                                   onClick={() => onPointClick?.(isReverseTP ? segment.torii.coord : segment.destination)}
                                 >
                                   {toName}
-                                </button>
+                                </AppButton>
                               </div>
                             </div>
                           </div>
@@ -1198,17 +1200,17 @@ if (travelMode === 'rail_new') {
                                   <span className="text-gray-400 ml-1">({formatTime(segTime)})</span>
                                 </div>
                                 <div className="text-xs text-gray-800">
-                                  <button className="hover:underline hover:text-blue-600" onClick={() => onPointClick?.(railSeg.startCoord)}>
+                                  <AppButton className="hover:underline hover:text-blue-600" onClick={() => onPointClick?.(railSeg.startCoord)}>
                                     {railSeg.stations[0]}
-                                  </button>
+                                  </AppButton>
                                   {railSeg.stations.length > 2 && (
                                     <span className="text-gray-400 mx-1">→ {railSeg.stations.length - 2}站 →</span>
                                   )}
                                   {railSeg.stations.length === 2 && <span className="text-gray-400 mx-1">→</span>}
                                   {railSeg.stations.length > 1 && (
-                                    <button className="hover:underline hover:text-blue-600" onClick={() => onPointClick?.(railSeg.endCoord)}>
+                                    <AppButton className="hover:underline hover:text-blue-600" onClick={() => onPointClick?.(railSeg.endCoord)}>
                                       {railSeg.stations[railSeg.stations.length - 1]}
-                                    </button>
+                                    </AppButton>
                                   )}
                                 </div>
                               </div>
@@ -1232,7 +1234,7 @@ if (travelMode === 'rail_new') {
           )}
         </div>
       )}
-    </div>
+    </AppCard>
   );
 }
 

@@ -14,6 +14,8 @@ import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/Gri
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
 import { Pencil, Plus, Save, Undo2, Redo2, X, ArrowLeftRight } from 'lucide-react';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 export type WorldPoint = { x: number; z: number; y?: number };
 
@@ -817,7 +819,7 @@ useEffect(() => {
     <div className="mt-2">
       {/* 主按钮行：在参考线按钮下面，仅 3 个按键 */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <AppButton
           type="button"
           className={`px-2 py-1 rounded text-xs border flex items-center gap-1 ${
             editEnabled ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300'
@@ -833,9 +835,9 @@ useEffect(() => {
         >
           <Pencil size={14} />
           控制点修改
-        </button>
+        </AppButton>
 
-        <button
+        <AppButton
           type="button"
           className={`px-2 py-1 rounded text-xs border flex items-center gap-1 ${
             addEnabled ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300'
@@ -851,9 +853,9 @@ useEffect(() => {
         >
           <Plus size={14} />
           控制点添加
-        </button>
+        </AppButton>
 
-        <button
+        <AppButton
           type="button"
           className={`px-2 py-1 rounded text-xs border flex items-center gap-1 ${
             canReverse ? 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50' : 'opacity-50 cursor-not-allowed bg-white text-gray-800 border-gray-300'
@@ -874,7 +876,7 @@ useEffect(() => {
         >
           <ArrowLeftRight size={14} />
           控制点反转
-        </button>
+        </AppButton>
 
 
         {(editEnabled || addEnabled) && dirty && <div className="text-xs text-orange-700">未保存修改</div>}
@@ -885,17 +887,17 @@ useEffect(() => {
       {/* 控制点修改窗口 */}
       {editEnabled && editPanelOpen && (
         <DraggablePanel id="cpT-edit-panel" defaultPosition={{ x: 16, y: 320 }} zIndex={1850}>
-          <div className="bg-white rounded-xl shadow-lg w-80 overflow-hidden border">
+          <AppCard className="w-80 overflow-hidden border">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-bold text-gray-800">控制点修改</h3>
-              <button
+              <AppButton
                 onClick={() => tryClosePanelDiscard('edit')}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="关闭"
                 type="button"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
 
             <div className="p-3 space-y-2">
@@ -905,7 +907,7 @@ useEffect(() => {
               </div>
 
               <div className="flex gap-2">
-                <button
+                <AppButton
                   className={`flex-1 px-2 py-2 rounded-lg text-sm bg-yellow-400 text-white flex items-center justify-center gap-2 ${
                     undoStack.length ? '' : 'opacity-50 cursor-not-allowed'
                   }`}
@@ -915,9 +917,9 @@ useEffect(() => {
                 >
                   <Undo2 className="w-4 h-4" />
                   撤回
-                </button>
+                </AppButton>
 
-                <button
+                <AppButton
                   className={`flex-1 px-2 py-2 rounded-lg text-sm bg-orange-400 text-white flex items-center justify-center gap-2 ${
                     redoStack.length ? '' : 'opacity-50 cursor-not-allowed'
                   }`}
@@ -927,40 +929,40 @@ useEffect(() => {
                 >
                   <Redo2 className="w-4 h-4" />
                   恢复
-                </button>
+                </AppButton>
 
-                <button
+                <AppButton
                   className="flex-1 px-2 py-2 rounded-lg text-sm bg-green-600 text-white flex items-center justify-center gap-2"
                   onClick={() => commitAndClose('edit')}
                   type="button"
                 >
                   <Save className="w-4 h-4" />
                   保存
-                </button>
+                </AppButton>
               </div>
 
               <div className="text-[11px] text-gray-500">
                 当前控制点数：{sessionCoords.length}；{selectedIndex === null ? '未选择控制点' : `已选 #${selectedIndex + 1}`}
               </div>
             </div>
-          </div>
+          </AppCard>
         </DraggablePanel>
       )}
 
       {/* 控制点添加窗口 */}
       {addEnabled && addPanelOpen && (
         <DraggablePanel id="cpT-add-panel" defaultPosition={{ x: 16, y: 320 }} zIndex={1850}>
-          <div className="bg-white rounded-xl shadow-lg w-80 overflow-hidden border">
+          <AppCard className="w-80 overflow-hidden border">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-bold text-gray-800">控制点添加</h3>
-              <button
+              <AppButton
                 onClick={() => tryClosePanelDiscard('add')}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="关闭"
                 type="button"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
 
             <div className="p-3 space-y-2">
@@ -971,7 +973,7 @@ useEffect(() => {
               </div>
 
               <div className="flex gap-2">
-                <button
+                <AppButton
                   className={`flex-1 px-2 py-2 rounded-lg text-sm bg-yellow-400 text-white flex items-center justify-center gap-2 ${
                     undoStack.length ? '' : 'opacity-50 cursor-not-allowed'
                   }`}
@@ -981,9 +983,9 @@ useEffect(() => {
                 >
                   <Undo2 className="w-4 h-4" />
                   撤回
-                </button>
+                </AppButton>
 
-                <button
+                <AppButton
                   className={`flex-1 px-2 py-2 rounded-lg text-sm bg-orange-400 text-white flex items-center justify-center gap-2 ${
                     redoStack.length ? '' : 'opacity-50 cursor-not-allowed'
                   }`}
@@ -993,21 +995,21 @@ useEffect(() => {
                 >
                   <Redo2 className="w-4 h-4" />
                   恢复
-                </button>
+                </AppButton>
 
-                <button
+                <AppButton
                   className="flex-1 px-2 py-2 rounded-lg text-sm bg-green-600 text-white flex items-center justify-center gap-2"
                   onClick={() => commitAndClose('add')}
                   type="button"
                 >
                   <Save className="w-4 h-4" />
                   保存
-                </button>
+                </AppButton>
               </div>
 
               <div className="text-[11px] text-gray-500">当前控制点数：{sessionCoords.length}</div>
             </div>
-          </div>
+          </AppCard>
         </DraggablePanel>
       )}
     </div>

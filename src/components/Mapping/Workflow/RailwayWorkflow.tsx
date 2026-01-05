@@ -1,6 +1,7 @@
 // File: src/components/Mapping/Workflow/RailwayWorkflow.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WorkflowComponentProps, WorldPoint, WorkflowCommitArgs } from './WorkflowHost';
+import AppButton from '@/components/ui/AppButton';
 
 /**
  * RailwayWorkflow（工作流：铁路）
@@ -132,7 +133,7 @@ function TopNav(props: TopNavProps) {
       <div className="text-sm font-semibold">{title}</div>
       <div className="flex items-center gap-2">
         {showPrev ? (
-          <button
+          <AppButton
             className={`px-3 py-1.5 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
               prevDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
             }`}
@@ -141,10 +142,10 @@ function TopNav(props: TopNavProps) {
             type="button"
           >
             上一步
-          </button>
+          </AppButton>
         ) : null}
         {showNext ? (
-          <button
+          <AppButton
             className={`px-3 py-1.5 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
               nextDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
             }`}
@@ -153,7 +154,7 @@ function TopNav(props: TopNavProps) {
             type="button"
           >
             下一步
-          </button>
+          </AppButton>
         ) : null}
       </div>
     </div>
@@ -796,7 +797,7 @@ if (step === 'branch') {
 
       <div className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
+          <AppButton
             type="button"
             className={`p-4 rounded border text-left ${
               branchChoice === '三线合一'
@@ -812,9 +813,9 @@ if (step === 'branch') {
             <div className="text-xs text-gray-600">
               完成信息后将输出：展示线(dir=3) + 下行(dir=0) + 上行(dir=1)
             </div>
-          </button>
+          </AppButton>
 
-          <button
+          <AppButton
             type="button"
             className={`p-4 rounded border text-left ${
               branchChoice === '上下行单划'
@@ -830,7 +831,7 @@ if (step === 'branch') {
             <div className="text-xs text-gray-600">
               完成信息后进入下行/上行两页，分别绘制并输出(dir=0/1)
             </div>
-          </button>
+          </AppButton>
         </div>
 
         {branchChoice ? (
@@ -849,7 +850,7 @@ if (step === 'branch') {
       <div className="p-3">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="text-sm font-semibold">铁路工作流：信息填写</div>
-          <button
+          <AppButton
             className="px-3 py-1.5 rounded border text-sm hover:bg-gray-100"
             onClick={() => {
               // 信息页无“前一步/后一步”，但允许用户直接退出回到工作流选择（不输出）
@@ -859,7 +860,7 @@ if (step === 'branch') {
             }}
           >
             退出
-          </button>
+          </AppButton>
         </div>
 
         <div className="space-y-3">
@@ -918,12 +919,12 @@ if (step === 'branch') {
             />
           </div>
 
-          <button
+          <AppButton
             className="w-full px-4 py-2.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"
             onClick={onCompleteInfo}
           >
             完成并输出
-          </button>
+          </AppButton>
 
           <div className="text-xs opacity-70">
             点击完成将：构建 LineID、输出展示线（dir=3 或联络线/其他为 dir=4/2），并按选择生成后续上下行线。
@@ -945,7 +946,7 @@ if (step === 'branch') {
             请绘制下行线路（Polyline）。当前点数：{draftCount}
           </div>
 
-          <button
+          <AppButton
             className="px-3 py-2 rounded border text-sm hover:bg-gray-100"
             onClick={() => {
               if (centerPoints.length < 2) {
@@ -957,7 +958,7 @@ if (step === 'branch') {
             }}
           >
             导入中心线坐标到当前工作区
-          </button>
+          </AppButton>
 
           <div className="text-xs opacity-70">
             点击“下一步”会临时保存下行点序并进入上行绘制。
@@ -975,7 +976,7 @@ if (step === 'branch') {
       <div className="p-3">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="text-sm font-semibold">上行方向</div>
-          <button
+          <AppButton
             className="px-3 py-1.5 rounded border text-sm hover:bg-gray-100"
             onClick={() => {
               const ok = window.confirm('确认退出当前工作流？已绘制内容将不会输出。');
@@ -984,7 +985,7 @@ if (step === 'branch') {
             }}
           >
             退出
-          </button>
+          </AppButton>
         </div>
 
         <div className="space-y-3">
@@ -992,7 +993,7 @@ if (step === 'branch') {
             请绘制上行线路（Polyline）。当前点数：{draftCount}
           </div>
 
-          <button
+          <AppButton
             className="px-3 py-2 rounded border text-sm hover:bg-gray-100"
             onClick={() => {
               if (centerPoints.length < 2) {
@@ -1004,14 +1005,14 @@ if (step === 'branch') {
             }}
           >
             导入中心线坐标到当前工作区
-          </button>
+          </AppButton>
 
-          <button
+          <AppButton
             className="w-full px-4 py-2.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"
             onClick={onCompleteUp}
           >
             完成并保存
-          </button>
+          </AppButton>
 
           <div className="text-xs opacity-70">
             将检查上下行均非空，并输出下行(dir=0)与上行(dir=1)。点序原样保留；起终站字段将依据点序相对中心线方向自动交换以匹配点序。

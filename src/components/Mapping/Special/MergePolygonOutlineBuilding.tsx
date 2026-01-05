@@ -4,6 +4,7 @@ import {
   type FieldDef,
   type GroupDef,
 } from '@/components/Mapping/featureFormats';
+import AppButton from '@/components/ui/AppButton';
 
 export type DraftBundle = {
   values: Record<string, any>;
@@ -107,7 +108,7 @@ function GroupsEditor({
           <div key={gr.key} className="border rounded p-2">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs font-bold text-gray-700">{gr.label}</div>
-              <button
+              <AppButton
                 type="button"
                 className="px-2 py-1 text-xs rounded border hover:bg-gray-50"
                 onClick={() => {
@@ -126,7 +127,7 @@ function GroupsEditor({
                 }}
               >
                 {gr.addButtonText ?? '添加条目'}
-              </button>
+              </AppButton>
             </div>
 
             {arr.length === 0 && <div className="text-xs text-gray-500">暂无条目</div>}
@@ -135,7 +136,7 @@ function GroupsEditor({
               <div key={idx} className="border rounded p-2 mb-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs text-gray-700">{gr.key} #{idx + 1}</div>
-                  <button
+                  <AppButton
                     type="button"
                     className="px-2 py-1 text-xs rounded border hover:bg-gray-50"
                     onClick={() => {
@@ -147,7 +148,7 @@ function GroupsEditor({
                     }}
                   >
                     删除
-                  </button>
+                  </AppButton>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -199,13 +200,13 @@ function BundleEditor({
     <div className="border rounded p-2">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-bold text-gray-800">{title}</div>
-        <button
+        <AppButton
           type="button"
           className="px-2 py-1 text-xs rounded border hover:bg-gray-50"
           onClick={onRemove}
         >
           删除
-        </button>
+        </AppButton>
       </div>
 
       {fields.length === 0 && <div className="text-xs text-gray-500">该类型暂无字段</div>}
@@ -245,7 +246,7 @@ export default function MergePolygonOutlineBuilding(props: Props) {
       </div>
 
       <div className="flex gap-2">
-        <button
+        <AppButton
           type="button"
           className="px-2 py-1 text-xs rounded border hover:bg-gray-50"
           disabled={!outlineDefOk || Boolean(draft.outline)}
@@ -259,9 +260,9 @@ export default function MergePolygonOutlineBuilding(props: Props) {
           }}
         >
           添加站台轮廓
-        </button>
+        </AppButton>
 
-        <button
+        <AppButton
           type="button"
           className="px-2 py-1 text-xs rounded border hover:bg-gray-50"
           disabled={!buildingDefOk || Boolean(draft.building)}
@@ -275,7 +276,7 @@ export default function MergePolygonOutlineBuilding(props: Props) {
           }}
         >
           添加车站建筑
-        </button>
+        </AppButton>
       </div>
 
       {draft.outline ? (

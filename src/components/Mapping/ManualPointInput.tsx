@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
 import { parseHalfStepNumber } from './GridSnapModeSwitch';
+import AppButton from '@/components/ui/AppButton';
 
 export interface ManualPointInputValue {
   x: number;
@@ -55,7 +56,7 @@ export default function ManualPointInput({ enabled = true, defaultY = -64, onSub
 
   return (
     <div className="mb-2" title={title}>
-      <button
+      <AppButton
         type="button"
         className={`w-full px-2 py-1 rounded text-sm border ${
           open ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
@@ -66,21 +67,21 @@ export default function ManualPointInput({ enabled = true, defaultY = -64, onSub
         }}
       >
         手动输入
-      </button>
+      </AppButton>
 
 {open && (
   <DraggablePanel id="manual-point-input" defaultPosition={{ x: 380, y: 120 }}>
     <div className="bg-white border rounded shadow-md w-80">
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="text-sm font-semibold">手动输入</div>
-        <button
+        <AppButton
           type="button"
           className="p-1 rounded hover:bg-gray-100"
           onClick={() => setOpen(false)}
           title="关闭"
         >
           <X size={16} />
-        </button>
+        </AppButton>
       </div>
 
       <div className="p-3">
@@ -121,9 +122,9 @@ export default function ManualPointInput({ enabled = true, defaultY = -64, onSub
         </div>
 
         <div className="mt-3 flex justify-end">
-          <button type="button" className="bg-green-500 text-white px-3 py-1 rounded" onClick={submit}>
+          <AppButton type="button" className="bg-green-500 text-white px-3 py-1 rounded" onClick={submit}>
             完成
-          </button>
+          </AppButton>
         </div>
       </div>
     </div>
