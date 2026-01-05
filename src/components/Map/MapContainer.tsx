@@ -32,7 +32,6 @@ import MeasuringModule from '@/components/Mapping/MeasuringModule';
 import MeasurementToolsModule from '@/components/Mapping/Mtools';
 
 import RuleDrivenLayer from '@/components/Rules/RuleDrivenLayer';
-import RuleLayerToggle from '@/components/Rules/RuleLayerToggle';
 
 import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/GridSnapModeSwitch';
 import AppButton from '@/components/ui/AppButton';
@@ -72,10 +71,12 @@ function MapContainer() {
   const [landmarks, setLandmarks] = useState<ParsedLandmark[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [routeHighlight, setRouteHighlight] = useState<RouteHighlightData | null>(null);
+  const [showRouteHighlight, setShowRouteHighlight] = useState(true);
 
 // 是否存在可绘制的路线（用于隐藏图层/显示清除按钮）
   const hasRoute =
     routeHighlight?.styledSegments?.some(s => Array.isArray(s.coords) && s.coords.length >= 2) ?? false;
+  const showRouteOverlay = hasRoute && showRouteHighlight;
 
   const [highlightedLine, setHighlightedLine] = useState<ParsedLine | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<{
@@ -560,29 +561,6 @@ map.on('mousemove', handleMouseMove);
       {/* 地图容器 */}
       <div ref={mapRef} className="w-full h-full" />
 
-      <MeasuringModule
-      mapReady={mapReady}
-      leafletMapRef={leafletMapRef}
-      projectionRef={projectionRef}
-      currentWorldId={currentWorld}
-      closeSignal={measuringCloseSignal}
-      onBecameActive={() => setMeasureToolsCloseSignal(v => v + 1)}
-      />
-
-      <MeasurementToolsModule
-      mapReady={mapReady}
-      leafletMapRef={leafletMapRef}
-      projectionRef={projectionRef}
-      closeSignal={measureToolsCloseSignal}
-      onBecameActive={() => setMeasuringCloseSignal(v => v + 1)}
-      />
-
-      {/* 规则驱动图层总开关（位置与右侧工具按钮体系对齐） */}
-      <RuleLayerToggle
-        active={showRuleLayers}
-        onToggle={() => setShowRuleLayers(v => !v)}
-      />
-
       {/* 规则驱动图层（总开关控制，worldId 切换自动重载） */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
         <RuleDrivenLayer
@@ -601,7 +579,7 @@ map.on('mousemove', handleMouseMove);
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showRailway && !hasRoute}
+          visible={showRailway && !showRouteOverlay}
           mapStyle={mapStyle}
           onStationClick={handleStationClick}
         />
@@ -613,7 +591,7 @@ map.on('mousemove', handleMouseMove);
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showLandmark && !hasRoute}
+          visible={showLandmark && !showRouteOverlay}
           onLandmarkClick={handleLandmarkClick}
         />
       )}
@@ -927,18 +905,40 @@ map.on('mousemove', handleMouseMove);
           showRailway={showRailway}
           showLandmark={showLandmark}
           showPlayers={showPlayers}
+          showRouteHighlight={showRouteHighlight}
+          showRuleLayers={showRuleLayers}
           dimBackground={dimBackground}
           mapStyle={mapStyle}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
           onTogglePlayers={setShowPlayers}
+          onToggleRouteHighlight={setShowRouteHighlight}
+          onToggleRuleLayers={(show) => setShowRuleLayers(show)}
           onToggleDimBackground={setDimBackground}
           onToggleMapStyle={setMapStyle}
-        />
+        >
+          <MeasurementToolsModule
+            mapReady={mapReady}
+            leafletMapRef={leafletMapRef}
+            projectionRef={projectionRef}
+            closeSignal={measureToolsCloseSignal}
+            onBecameActive={() => setMeasuringCloseSignal(v => v + 1)}
+            launcherSlot={(launcher) => <div className="hidden sm:block">{launcher}</div>}
+          />
+          <MeasuringModule
+            mapReady={mapReady}
+            leafletMapRef={leafletMapRef}
+            projectionRef={projectionRef}
+            currentWorldId={currentWorld}
+            closeSignal={measuringCloseSignal}
+            onBecameActive={() => setMeasureToolsCloseSignal(v => v + 1)}
+            launcherSlot={(launcher) => <div className="hidden sm:block">{launcher}</div>}
+          />
+        </LayerControl>
       </div>
 
       {/* 路径高亮图层 */}
-{mapReady && leafletMapRef.current && projectionRef.current && hasRoute && routeHighlight && (
+{mapReady && leafletMapRef.current && projectionRef.current && showRouteOverlay && routeHighlight && (
   <RouteHighlightLayer
     map={leafletMapRef.current}
     projection={projectionRef.current}
