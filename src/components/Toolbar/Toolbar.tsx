@@ -191,17 +191,18 @@ interface AboutCardProps {
 
 export function AboutCard({ onClose }: AboutCardProps) {
   return (
-    <AppCard className="bg-white/90 p-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-800">关于</span>
+    <AppCard className="bg-white/90">
+      <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
+        <h3 className="font-bold text-gray-800">关于</h3>
         <AppButton
           onClick={onClose}
-          className="p-1 hover:bg-gray-200 rounded text-gray-500"
+          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+          title="关闭"
         >
           <X className="w-4 h-4" />
         </AppButton>
       </div>
-      <div className="text-xs text-gray-600 space-y-2">
+      <div className="p-4 text-xs text-gray-600 space-y-2">
         <div className="bg-yellow-50 border border-yellow-200 rounded px-2 py-1 text-yellow-700">
           该平台正在测试中
         </div>
@@ -210,12 +211,12 @@ export function AboutCard({ onClose }: AboutCardProps) {
           <span>Venti_Lynn</span>
         </div>
         <div>
-          <span className="font-medium text-gray-500">测绘/测量控件：</span>
+          <span className="font-medium text-gray-800">测绘/测量控件：</span>
           <span>Ozstk639</span>
         </div>
         <div>
           <span className="font-medium text-gray-800">数据来源：</span>
-          <div className="mt-1 space-y-0.5 text-gray-500">
+          <div className="mt-1 space-y-0.5 text-gray-600">
             <div>
               <a href="https://satellite.ria.red/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                 莉亚红一号卫星
