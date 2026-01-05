@@ -79,10 +79,13 @@ type MeasuringModuleProps = {
 
   // 新增：当本模块打开时通知 MapContainer 关闭别的面板
   onBecameActive?: () => void;
+
+  // 可选：将启动按钮插入到外部工具栏
+  launcherSlot?: (launcher: React.ReactNode) => React.ReactNode;
 };
 
 export default function MeasuringModule(props: MeasuringModuleProps) {
-  const { mapReady, leafletMapRef, projectionRef, currentWorldId, closeSignal, onBecameActive } = props;
+  const { mapReady, leafletMapRef, projectionRef, currentWorldId, closeSignal, onBecameActive, launcherSlot } = props;
 
 
 // ---------- 测绘 & 图层管理状态 ------------
@@ -2166,89 +2169,96 @@ const workflowBridge: WorkflowBridge = {
   exitWorkflowToSelector: () => stopWorkflowToSelector(),
 };
 
+  const launcherContent = (
+    <div className="relative">
+      <ToolIconButton
+        label="测绘"
+        icon={<Pencil className="w-5 h-5" />}
+        active={measuringActive}
+        tone="blue"
+        shadow
+        onClick={toggleMeasureDropdown}
+      />
 
-
-
-return (
-  <>
-    <div className="hidden sm:block">
-      {/* 右侧工具按钮：测绘（图标 + 下拉） */}
-      <div className="absolute bottom-8 right-14 sm:top-4 sm:bottom-auto sm:right-[316px] z-[1001]">
-        <div className="relative">
-          <ToolIconButton
-            label="测绘"
-            icon={<Pencil className="w-5 h-5" />}
-            active={measuringActive}
-            tone="blue"
-            shadow
-            onClick={toggleMeasureDropdown}
-          />
-
-          {/* 下拉菜单：仅再次点击“测绘”按钮才收回 */}
-          <AppCard
-            className={`absolute right-0 w-44 border border-gray-200 py-1 z-50 transition-all duration-150 sm:mt-2 sm:top-full sm:origin-top-right max-md:bottom-full max-md:mb-2 max-md:origin-bottom-right ${
-              measureDropdownOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
-            }`}
-          >
-{/* 开始测绘（完整/快捷） 或 结束测绘 */}
-{!measuringActive ? (
-  <>
-    <AppButton
-      onClick={() => startMeasuringFromMenu('full')}
-      className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
-      type="button"
-    >
-      <Pencil className="w-4 h-4" />
-      <span>开始测绘(完整)</span>
-    </AppButton>
-
-    <AppButton
-      onClick={() => startMeasuringFromMenu('workflow')}
-      className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
-      type="button"
-    >
-      <Pencil className="w-4 h-4" />
-      <span>开始测绘(快捷)</span>
-    </AppButton>
-  </>
-) : (
-  <AppButton
-    onClick={endMeasuringFromMenu}
-    className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
-    type="button"
-  >
-    <X className="w-4 h-4" />
-    <span className="font-medium">结束测绘</span>
-  </AppButton>
-)}
-
-
-            {/* 导入数据 */}
-            {/* 导入数据：仅开始测绘后显示 */}
-{measuringActive && (
-  <AppButton
-    onClick={() => setImportPanelOpen(true)}
-    className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
-    type="button"
-  >
-    <Upload className="w-4 h-4" />
-    <span>导入数据</span>
-  </AppButton>
-)}
-
-
-            {/* 清空所有图层 */}
+      {/* 下拉菜单：仅再次点击“测绘”按钮才收回 */}
+      <AppCard
+        className={`absolute right-0 w-44 border border-gray-200 py-1 z-50 transition-all duration-150 sm:mt-2 sm:top-full sm:origin-top-right max-md:bottom-full max-md:mb-2 max-md:origin-bottom-right ${
+          measureDropdownOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+        }`}
+      >
+        {/* 开始测绘（完整/快捷） 或 结束测绘 */}
+        {!measuringActive ? (
+          <>
             <AppButton
-              onClick={clearAllLayers}
+              onClick={() => startMeasuringFromMenu('full')}
               className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
               type="button"
             >
-              <Trash2 className="w-4 h-4" />
-              <span>清空所有图层</span>
+              <Pencil className="w-4 h-4" />
+              <span>开始测绘(完整)</span>
             </AppButton>
-          </AppCard>
-        </div>
+
+            <AppButton
+              onClick={() => startMeasuringFromMenu('workflow')}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+              type="button"
+            >
+              <Pencil className="w-4 h-4" />
+              <span>开始测绘(快捷)</span>
+            </AppButton>
+          </>
+        ) : (
+          <AppButton
+            onClick={endMeasuringFromMenu}
+            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+            type="button"
+          >
+            <X className="w-4 h-4" />
+            <span className="font-medium">结束测绘</span>
+          </AppButton>
+        )}
+
+        {/* 导入数据：仅开始测绘后显示 */}
+        {measuringActive && (
+          <AppButton
+            onClick={() => setImportPanelOpen(true)}
+            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+            type="button"
+          >
+            <Upload className="w-4 h-4" />
+            <span>导入数据</span>
+          </AppButton>
+        )}
+
+        {/* 清空所有图层 */}
+        <AppButton
+          onClick={clearAllLayers}
+          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+          type="button"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>清空所有图层</span>
+        </AppButton>
+      </AppCard>
+    </div>
+  );
+
+  const launcherNode = launcherSlot ? (
+    launcherSlot(launcherContent)
+  ) : (
+    <div className="hidden sm:block">
+      {/* 右侧工具按钮：测绘（图标 + 下拉） */}
+      <div className="absolute bottom-8 right-14 sm:top-4 sm:bottom-auto sm:right-[316px] z-[1001]">
+        <AppCard className="bg-white/90 p-2 flex items-center gap-1">
+          {launcherContent}
+        </AppCard>
       </div>
+    </div>
+  );
+
+  return (
+    <>
+      {launcherNode}
 
       {/* =========================
           测绘菜单：桌面端（可拖拽）
@@ -3276,7 +3286,6 @@ placeholder={
 )}
 
 
-    </div>
   </>
 );
 }

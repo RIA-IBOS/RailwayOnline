@@ -25,6 +25,11 @@ type MeasurementToolsModuleProps = {
    * 当本组件被打开时回调：MapContainer 用它去“关闭 MeasuringModule（视同点击结束测绘）”
    */
   onBecameActive?: () => void;
+
+  /**
+   * 可选：将启动按钮插入到外部工具栏
+   */
+  launcherSlot?: (launcher: React.ReactNode) => React.ReactNode;
 };
 
 type MainTab = 'measure' | 'shape' | 'analysis';
@@ -73,7 +78,7 @@ function rotateXZ(x: number, z: number, rad: number) {
 }
 
 export default function MeasurementToolsModule(props: MeasurementToolsModuleProps) {
-  const { mapReady, leafletMapRef, projectionRef, closeSignal, onBecameActive } = props;
+  const { mapReady, leafletMapRef, projectionRef, closeSignal, onBecameActive, launcherSlot } = props;
 
   // 主按钮开关
   const [active, setActive] = useState(false);
@@ -689,21 +694,28 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
       ? (selectedLayer.data as any)?.rotationDeg ?? 0
       : 0;
 
+  const launcher = (
+    <ToolIconButton
+      label="测量工具"
+      icon={<Ruler className="w-5 h-5" />}
+      active={active}
+      tone="blue"
+      shadow
+      onClick={handleMainToggle}
+    />
+  );
+  const launcherNode = launcherSlot ? (
+    launcherSlot(launcher)
+  ) : (
+    <div className="hidden sm:block absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-[260px] z-[1001]">
+      {launcher}
+    </div>
+  );
+
   return (
     <>
-      {/* 右上角：图标按钮（风格参考 Toolbar.tsx）
-          注意：为了“紧挨右上角 bar 左侧”，这里用了一个经验 right 偏移值。
-          如果仍与右上角 LayerControl 重叠，把 sm:right-[260px] 这个数调大/调小即可。 */}
-      <div className="hidden sm:block absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-[260px] z-[1001]">
-        <ToolIconButton
-          label="测量工具"
-          icon={<Ruler className="w-5 h-5" />}
-          active={active}
-          tone="blue"
-          shadow
-          onClick={handleMainToggle}
-        />
-      </div>
+      {/* 启动按钮：默认悬浮右上角，也可通过 launcherSlot 收纳到工具栏 */}
+      {launcherNode}
 
       {/* =========================
           主操作面板：桌面端（可拖拽）

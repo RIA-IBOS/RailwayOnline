@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil, Settings } from 'lucide-react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil, Settings, Layers } from 'lucide-react';
 import type { MapStyle } from '@/lib/cookies';
 import ToolIconButton from '@/components/Toolbar/ToolIconButton';
 import AppButton from '@/components/ui/AppButton';
@@ -243,27 +243,39 @@ interface LayerControlProps {
   showRailway: boolean;
   showLandmark: boolean;
   showPlayers: boolean;
+  showRouteHighlight: boolean;
+  showRuleLayers?: boolean;
   dimBackground: boolean;
   mapStyle: MapStyle;
   onToggleRailway: (show: boolean) => void;
   onToggleLandmark: (show: boolean) => void;
   onTogglePlayers: (show: boolean) => void;
+  onToggleRouteHighlight: (show: boolean) => void;
+  onToggleRuleLayers?: (show: boolean) => void;
   onToggleDimBackground: (dim: boolean) => void;
   onToggleMapStyle: (style: MapStyle) => void;
+  children?: React.ReactNode;
 }
 
 export function LayerControl({
   showRailway,
   showLandmark,
   showPlayers,
+  showRouteHighlight,
+  showRuleLayers,
   dimBackground,
   mapStyle,
   onToggleRailway,
   onToggleLandmark,
   onTogglePlayers,
+  onToggleRouteHighlight,
+  onToggleRuleLayers,
   onToggleDimBackground,
   onToggleMapStyle,
+  children,
 }: LayerControlProps) {
+  const hasExtra = !!children;
+
   return (
     <AppCard className="bg-white/90 p-2 flex items-center gap-1">
       {/* 铁路图层 */}
@@ -293,7 +305,33 @@ export function LayerControl({
         onClick={() => onTogglePlayers(!showPlayers)}
       />
 
+      {/* 规则图层 */}
+      {typeof showRuleLayers === 'boolean' && onToggleRuleLayers && (
+        <div className="hidden sm:block">
+          <ToolIconButton
+            label="规则"
+            icon={<Layers className="w-5 h-5" />}
+            active={showRuleLayers}
+            tone="blue"
+            onClick={() => onToggleRuleLayers(!showRuleLayers)}
+          />
+        </div>
+      )}
+
+      {/* 规划图层 */}
+      <ToolIconButton
+        label="规划"
+        icon={<Navigation className="w-5 h-5" />}
+        active={showRouteHighlight}
+        tone="gray"
+        onClick={() => onToggleRouteHighlight(!showRouteHighlight)}
+      />
+
       <div className="w-px h-6 bg-gray-200" />
+
+      {hasExtra && children}
+
+      {hasExtra && <div className="hidden sm:block w-px h-6 bg-gray-200" />}
 
       {/* 淡化背景 */}
       <ToolIconButton
