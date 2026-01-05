@@ -2176,8 +2176,8 @@ const workflowBridge: WorkflowBridge = {
         icon={<Pencil className="w-5 h-5" />}
         active={measuringActive}
         tone="blue"
-        shadow
         onClick={toggleMeasureDropdown}
+        className="h-11 w-11"
       />
 
       {/* 下拉菜单：仅再次点击“测绘”按钮才收回 */}
@@ -2243,14 +2243,123 @@ const workflowBridge: WorkflowBridge = {
     </div>
   );
 
-  const launcherNode = launcherSlot ? (
+  const layerPanelCard = (
+    <AppCard className="w-full p-3 max-h-[70vh] overflow-y-auto">
+      {(() => {
+        const busy = (drawing && drawMode !== 'none') || editingLayerId !== null;
+        const visibleList = layers.filter((l) => l.id !== editingLayerId); // 编辑中的层在列表隐藏
+
+        return (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-sm text-gray-700">图层</h3>
+
+              <AppButton
+                type="button"
+                className={`px-2 py-1 text-sm rounded border ${
+                  busy || visibleList.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
+                    : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
+                }`}
+                title={
+                  busy
+                    ? '当前有要素正在编辑/绘制，无法整体导出'
+                    : visibleList.length === 0
+                      ? '暂无图层'
+                      : '导出图层管理区全部图层 JSON'
+                }
+                disabled={busy || visibleList.length === 0}
+                onClick={() => {
+                  if (busy || visibleList.length === 0) return;
+                  setJsonPanelText(getAllLayersJSONOutput());
+                  setJsonPanelOpen(true);
+                }}
+              >
+                整体JSON
+              </AppButton>
+            </div>
+
+            {visibleList.map((l) => (
+              <div key={l.id} className="flex items-center gap-1 mb-1">
+                <AppButton
+                  className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
+                  onClick={() => toggleLayerVisible(l.id)}
+                  type="button"
+                >
+                  {l.visible ? '隐藏' : '显示'}
+                </AppButton>
+
+                <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
+                  ↑
+                </AppButton>
+
+                <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
+                  ↓
+                </AppButton>
+
+                <AppButton
+                  className={`px-2 py-1 text-sm ${
+                    busy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
+                  }`}
+                  disabled={busy}
+                  onClick={() => {
+                    if (busy) return;
+                    editLayer(l.id);
+                  }}
+                  type="button"
+                  title={busy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
+                >
+                  编辑
+                </AppButton>
+
+                <AppButton className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
+                  删除
+                </AppButton>
+
+                <AppButton
+                  className="px-3 py-1 text-sm bg-purple-400 text-white"
+                  onClick={() => {
+                    setJsonPanelText(getLayerJSONOutput(l));
+                    setJsonPanelOpen(true);
+                  }}
+                  type="button"
+                >
+                  JSON
+                </AppButton>
+
+                <div className="flex-1 text-sm truncate">
+                  #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
+                </div>
+              </div>
+            ))}
+          </>
+        );
+      })()}
+    </AppCard>
+  );
+
+  const emptyLayerCard = (
+    <AppCard className="w-full p-3">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-sm text-gray-700">图层</h3>
+      </div>
+      <div className="text-sm text-gray-500">未开启测绘</div>
+    </AppCard>
+  );
+
+  const rightDockNode = launcherSlot ? (
     launcherSlot(launcherContent)
   ) : (
     <div className="hidden sm:block">
-      {/* 右侧工具按钮：测绘（图标 + 下拉） */}
-      <div className="absolute bottom-8 right-14 sm:top-4 sm:bottom-auto sm:right-[316px] z-[1001]">
-        <AppCard className="bg-white/90 p-2 flex items-center gap-1">
-          {launcherContent}
+      <div className="fixed top-4 right-4 z-[1001] flex flex-col gap-3 w-80">
+        {measuringActive ? layerPanelCard : emptyLayerCard}
+        <AppCard className="w-full p-3 overflow-visible">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-sm text-gray-700">工具</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {launcherContent}
+          </div>
         </AppCard>
       </div>
     </div>
@@ -2258,7 +2367,7 @@ const workflowBridge: WorkflowBridge = {
 
   return (
     <>
-      {launcherNode}
+      {rightDockNode}
 
       {/* =========================
           测绘菜单：桌面端（可拖拽）
@@ -3068,101 +3177,12 @@ placeholder={
         </div>
       )}
 
-{/* ======== 图层控制器 ======== */}
-{measuringActive && (
-  <AppCard className="fixed top-20 right-4 p-3 z-[1000] w-85 max-h-[70vh] overflow-y-auto">
-    {(() => {
-      const busy = (drawing && drawMode !== 'none') || editingLayerId !== null;
-      const visibleList = layers.filter((l) => l.id !== editingLayerId); // 编辑中的层在列表隐藏
-
-      return (
-        <>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold">测绘图层</h3>
-
-            <AppButton
-              type="button"
-              className={`px-2 py-1 text-sm rounded border ${
-                busy || visibleList.length === 0
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
-                  : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
-              }`}
-              title={
-                busy
-                  ? '当前有要素正在编辑/绘制，无法整体导出'
-                  : visibleList.length === 0
-                    ? '暂无图层'
-                    : '导出图层管理区全部图层 JSON'
-              }
-              disabled={busy || visibleList.length === 0}
-              onClick={() => {
-                if (busy || visibleList.length === 0) return;
-                setJsonPanelText(getAllLayersJSONOutput());
-                setJsonPanelOpen(true);
-              }}
-            >
-              整体JSON
-            </AppButton>
-          </div>
-
-          {visibleList.map((l) => (
-            <div key={l.id} className="flex items-center gap-1 mb-1">
-              <AppButton
-                className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
-                onClick={() => toggleLayerVisible(l.id)}
-                type="button"
-              >
-                {l.visible ? '隐藏' : '显示'}
-              </AppButton>
-
-              <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
-                ↑
-              </AppButton>
-
-              <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
-                ↓
-              </AppButton>
-
-              <AppButton
-                className={`px-2 py-1 text-sm ${
-                  busy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
-                }`}
-                disabled={busy}
-                onClick={() => {
-                  if (busy) return;
-                  editLayer(l.id);
-                }}
-                type="button"
-                title={busy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
-              >
-                编辑
-              </AppButton>
-
-              <AppButton className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
-                删除
-              </AppButton>
-
-              <AppButton
-                className="px-3 py-1 text-sm bg-purple-400 text-white"
-                onClick={() => {
-                  setJsonPanelText(getLayerJSONOutput(l));
-                  setJsonPanelOpen(true);
-                }}
-                type="button"
-              >
-                JSON
-              </AppButton>
-
-              <div className="flex-1 text-sm truncate">
-                #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
-              </div>
-            </div>
-          ))}
-        </>
-      );
-    })()}
-  </AppCard>
-)}
+      {/* ======== 图层控制器（手机端） ======== */}
+      {measuringActive && (
+        <div className="sm:hidden fixed top-20 right-2 left-2 z-[1000]">
+          {layerPanelCard}
+        </div>
+      )}
 
 
       {/* ======== JSON 导出窗口（替代 alert/print） ======== */}

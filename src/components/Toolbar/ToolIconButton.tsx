@@ -35,7 +35,7 @@ export default function ToolIconButton({
   type = 'button',
 }: ToolIconButtonProps) {
   const base =
-    'relative group flex flex-col items-center justify-center p-2 transition-colors';
+    'relative group flex flex-col items-center justify-center h-11 w-11 p-2 transition-colors';
   const inactive = 'bg-white/90 text-gray-600 hover:bg-gray-100';
   const disabledCls = 'bg-gray-100 text-gray-300 cursor-not-allowed';
   const activeCls = TONE_ACTIVE_CLASS[tone];

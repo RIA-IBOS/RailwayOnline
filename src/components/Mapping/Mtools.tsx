@@ -700,7 +700,6 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
       icon={<Ruler className="w-5 h-5" />}
       active={active}
       tone="blue"
-      shadow
       onClick={handleMainToggle}
     />
   );

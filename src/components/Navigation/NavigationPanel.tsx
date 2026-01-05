@@ -746,8 +746,8 @@ if (travelMode === 'rail_new') {
       {/* 标题 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <h3 className="font-bold text-gray-800">路径规划</h3>
-        <AppButton onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <X className="w-5 h-5" />
+        <AppButton onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="关闭">
+          <X className="w-4 h-4" />
         </AppButton>
       </div>
 
