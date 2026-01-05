@@ -6,6 +6,8 @@
 import { X, Train, Home } from 'lucide-react';
 import type { ParsedStation, Coordinate, ParsedLine } from '@/types';
 import type { ParsedLandmark, LandmarkCoord } from '@/lib/landmarkParser';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface PointDetailCardProps {
   // 选中的点位（站点或地标）
@@ -68,7 +70,7 @@ export function PointDetailCard({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] flex flex-col">
+    <AppCard className="w-full sm:w-72 max-h-[60vh] flex flex-col">
       {/* 头部 */}
       <div
         className={`px-4 py-3 rounded-t-lg flex items-center justify-between ${
@@ -90,12 +92,12 @@ export function PointDetailCard({
             X: {Math.round(selectedPoint.coord.x)}, Z: {Math.round(selectedPoint.coord.z)}
           </p>
         </div>
-        <button
+        <AppButton
           onClick={onClose}
           className="text-white/80 hover:text-white p-1"
         >
           <X className="w-5 h-5" />
-        </button>
+        </AppButton>
       </div>
 
       {/* 详情内容 */}
@@ -109,13 +111,13 @@ export function PointDetailCard({
                 {selectedPoint.station.lines.map((lineId, idx) => {
                   const line = findLine(lineId);
                   return (
-                    <button
+                    <AppButton
                       key={idx}
                       className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs hover:bg-blue-200 transition-colors"
                       onClick={() => line && onLineClick?.(line)}
                     >
                       {formatLineName(lineId)}
-                    </button>
+                    </AppButton>
                   );
                 })}
               </div>
@@ -140,7 +142,7 @@ export function PointDetailCard({
             </div>
             <div className="space-y-1">
               {nearbyStations.map((station, idx) => (
-                <button
+                <AppButton
                   key={idx}
                   className="w-full flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded text-left"
                   onClick={() => onStationClick?.(station)}
@@ -149,7 +151,7 @@ export function PointDetailCard({
                   <span className="text-xs text-gray-400 ml-2">
                     {Math.round(getDistance(selectedPoint.coord, station.coord))}m
                   </span>
-                </button>
+                </AppButton>
               ))}
             </div>
           </div>
@@ -164,7 +166,7 @@ export function PointDetailCard({
             </div>
             <div className="space-y-1">
               {nearbyLandmarks.map((landmark, idx) => (
-                <button
+                <AppButton
                   key={idx}
                   className="w-full flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded text-left"
                   onClick={() => onLandmarkClick?.(landmark)}
@@ -176,7 +178,7 @@ export function PointDetailCard({
                   <span className="text-xs text-gray-400 ml-2">
                     {landmark.coord ? Math.round(getDistance(selectedPoint.coord, landmark.coord)) : '?'}m
                   </span>
-                </button>
+                </AppButton>
               ))}
             </div>
           </div>
@@ -189,7 +191,7 @@ export function PointDetailCard({
           </div>
         )}
       </div>
-    </div>
+    </AppCard>
   );
 }
 

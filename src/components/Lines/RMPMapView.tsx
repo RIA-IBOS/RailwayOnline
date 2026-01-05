@@ -12,6 +12,7 @@ import {
   getStationColor,
   getLineBadgeInfo,
 } from '@/lib/rmpSvgRenderer';
+import AppButton from '@/components/ui/AppButton';
 
 // RMP 数据类型
 interface RMPNode {
@@ -452,34 +453,34 @@ export function RMPMapView({ rmpData, onStationClick }: RMPMapViewProps) {
     <>
       {/* 控制按钮 */}
       <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
-        <button
+        <AppButton
           onClick={zoomIn}
           className="p-2 bg-white rounded shadow hover:bg-gray-100"
           title="放大"
         >
           <ZoomIn className="w-4 h-4" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           onClick={zoomOut}
           className="p-2 bg-white rounded shadow hover:bg-gray-100"
           title="缩小"
         >
           <ZoomOut className="w-4 h-4" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           onClick={resetView}
           className="p-2 bg-white rounded shadow hover:bg-gray-100"
           title="重置视图"
         >
           <RotateCcw className="w-4 h-4" />
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           onClick={toggleFullscreen}
           className="p-2 bg-white rounded shadow hover:bg-gray-100"
           title={isFullscreen ? "退出全屏" : "全屏"}
         >
           {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-        </button>
+        </AppButton>
       </div>
 
       {/* SVG 容器 */}
