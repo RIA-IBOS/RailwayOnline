@@ -101,9 +101,9 @@ const MAP_STYLE_OPTIONS: Array<{
   icon: React.ReactNode;
   description: string;
 }> = [
-  { value: 'default', label: '原版', icon: <Map className="w-4 h-4" />, description: '卫星原始渲染' },
-  { value: 'watercolor', label: '淡彩', icon: <Palette className="w-4 h-4" />, description: '柔和水彩风格' },
-  { value: 'sketch', label: '素描', icon: <Pencil className="w-4 h-4" />, description: '手绘地图风格' },
+  { value: 'default', label: '原版', icon: <Map className="w-5 h-5" />, description: '卫星原始渲染' },
+  { value: 'watercolor', label: '淡彩', icon: <Palette className="w-5 h-5" />, description: '柔和水彩风格' },
+  { value: 'sketch', label: '素描', icon: <Pencil className="w-5 h-5" />, description: '手绘地图风格' },
 ];
 
 /**
@@ -141,7 +141,7 @@ function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps)
     <div ref={dropdownRef} className="relative">
       <AppButton
         onClick={() => setIsOpen(!isOpen)}
-        className={`p-2 rounded-lg transition-colors group relative ${
+        className={`h-11 w-11 p-2 transition-colors group relative ${
           mapStyle !== 'default'
             ? 'bg-amber-100 text-amber-600'
             : 'hover:bg-gray-100 text-gray-400'
@@ -277,73 +277,79 @@ export function LayerControl({
   const hasExtra = !!children;
 
   return (
-    <AppCard className="bg-white/90 p-2 flex items-center gap-1">
-      {/* 铁路图层 */}
-      <ToolIconButton
-        label="铁路"
-        icon={<Train className="w-5 h-5" />}
-        active={showRailway}
-        tone="blue"
-        onClick={() => onToggleRailway(!showRailway)}
-      />
+    <AppCard className="bg-white/90 p-3 flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1">
+        {/* 铁路图层 */}
+        <ToolIconButton
+          label="铁路"
+          icon={<Train className="w-5 h-5" />}
+          active={showRailway}
+          tone="blue"
+          onClick={() => onToggleRailway(!showRailway)}
+        />
 
-      {/* 地标图层 */}
-      <ToolIconButton
-        label="地标"
-        icon={<Home className="w-5 h-5" />}
-        active={showLandmark}
-        tone="green"
-        onClick={() => onToggleLandmark(!showLandmark)}
-      />
+        {/* 地标图层 */}
+        <ToolIconButton
+          label="地标"
+          icon={<Home className="w-5 h-5" />}
+          active={showLandmark}
+          tone="green"
+          onClick={() => onToggleLandmark(!showLandmark)}
+        />
 
-      {/* 玩家图层 */}
-      <ToolIconButton
-        label="玩家"
-        icon={<User className="w-5 h-5" />}
-        active={showPlayers}
-        tone="cyan"
-        onClick={() => onTogglePlayers(!showPlayers)}
-      />
+        {/* 玩家图层 */}
+        <ToolIconButton
+          label="玩家"
+          icon={<User className="w-5 h-5" />}
+          active={showPlayers}
+          tone="cyan"
+          onClick={() => onTogglePlayers(!showPlayers)}
+        />
 
-      {/* 规则图层 */}
-      {typeof showRuleLayers === 'boolean' && onToggleRuleLayers && (
-        <div className="hidden sm:block">
-          <ToolIconButton
-            label="规则"
-            icon={<Layers className="w-5 h-5" />}
-            active={showRuleLayers}
-            tone="blue"
-            onClick={() => onToggleRuleLayers(!showRuleLayers)}
-          />
-        </div>
-      )}
+        {/* 规则图层 */}
+        {typeof showRuleLayers === 'boolean' && onToggleRuleLayers && (
+          <div className="hidden sm:block">
+            <ToolIconButton
+              label="规则"
+              icon={<Layers className="w-5 h-5" />}
+              active={showRuleLayers}
+              tone="blue"
+              onClick={() => onToggleRuleLayers(!showRuleLayers)}
+            />
+          </div>
+        )}
 
-      {/* 规划图层 */}
-      <ToolIconButton
-        label="规划"
-        icon={<Navigation className="w-5 h-5" />}
-        active={showRouteHighlight}
-        tone="gray"
-        onClick={() => onToggleRouteHighlight(!showRouteHighlight)}
-      />
+        {/* 规划图层 */}
+        <ToolIconButton
+          label="规划"
+          icon={<Navigation className="w-5 h-5" />}
+          active={showRouteHighlight}
+          tone="gray"
+          onClick={() => onToggleRouteHighlight(!showRouteHighlight)}
+        />
+      </div>
 
-      <div className="w-px h-6 bg-gray-200" />
+      <div className="h-px bg-gray-200" />
 
-      {hasExtra && children}
+      <div className="flex flex-wrap items-center gap-1">
+        {hasExtra && (
+          <div className="flex items-center gap-1">
+            {children}
+          </div>
+        )}
 
-      {hasExtra && <div className="hidden sm:block w-px h-6 bg-gray-200" />}
+        {/* 淡化背景 */}
+        <ToolIconButton
+          label="淡化背景"
+          icon={<Moon className="w-5 h-5" />}
+          active={dimBackground}
+          tone="purple"
+          onClick={() => onToggleDimBackground(!dimBackground)}
+        />
 
-      {/* 淡化背景 */}
-      <ToolIconButton
-        label="淡化背景"
-        icon={<Moon className="w-5 h-5" />}
-        active={dimBackground}
-        tone="purple"
-        onClick={() => onToggleDimBackground(!dimBackground)}
-      />
-
-      {/* 地图风格下拉选择器 */}
-      <MapStyleSelector mapStyle={mapStyle} onToggleMapStyle={onToggleMapStyle} />
+        {/* 地图风格下拉选择器 */}
+        <MapStyleSelector mapStyle={mapStyle} onToggleMapStyle={onToggleMapStyle} />
+      </div>
     </AppCard>
   );
 }
