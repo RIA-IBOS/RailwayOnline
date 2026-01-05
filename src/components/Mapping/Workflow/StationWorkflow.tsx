@@ -1,6 +1,7 @@
 // File: src/components/Mapping/Workflow/StationWorkflow.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WorkflowComponentProps, WorldPoint } from './WorkflowHost';
+import AppButton from '@/components/ui/AppButton';
 
 /**
  * StationWorkflow（工作流：车站和站台）
@@ -98,7 +99,7 @@ function TopNav(props: TopNavProps) {
       <div className="text-sm font-semibold">{title}</div>
       <div className="flex items-center gap-2">
         {showPrev ? (
-          <button
+          <AppButton
             className={`px-3 py-1.5 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
               prevDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
             }`}
@@ -107,10 +108,10 @@ function TopNav(props: TopNavProps) {
             type="button"
           >
             上一步
-          </button>
+          </AppButton>
         ) : null}
         {showNext ? (
-          <button
+          <AppButton
             className={`px-3 py-1.5 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
               nextDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
             }`}
@@ -119,7 +120,7 @@ function TopNav(props: TopNavProps) {
             type="button"
           >
             下一步
-          </button>
+          </AppButton>
         ) : null}
       </div>
     </div>
@@ -735,7 +736,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
           {lockedHint}
 
           <div className="flex gap-2">
-            <button
+            <AppButton
               className={`px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
                 !canSkip || stbFinalized ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'
               }`}
@@ -744,7 +745,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               onClick={finalizeStbSkip}
             >
               跳过
-            </button>
+            </AppButton>
             <div className="text-xs opacity-70 self-center">当绘制区为空时可跳过；绘制完成后请点击右上角“下一步”。</div>
           </div>
         </div>
@@ -772,13 +773,13 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
           <div className="text-xs opacity-70">请使用面要素绘制模式绘制车站轮廓（PFB）。</div>
 
           {!stbSkipped && stbPolygon.length >= 3 ? (
-            <button
+            <AppButton
               className="px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 hover:bg-gray-100"
               type="button"
               onClick={() => bridgeRef.current.setTempPoints(stbPolygon)}
             >
               从车站总建筑导入坐标
-            </button>
+            </AppButton>
           ) : null}
 
           <div className="text-xs opacity-70">保存后将输出到图层管理：plfRoundID={pfbId || '(自动生成)'}。</div>
@@ -811,13 +812,13 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold">线路条目 #{idx + 1}</div>
                   {idx > 0 ? (
-                    <button
+                    <AppButton
                       className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100"
                       type="button"
                       onClick={() => setPlfLinesDown((p) => p.filter((_, i) => i !== idx))}
                     >
                       删除
-                    </button>
+                    </AppButton>
                   ) : null}
                 </div>
 
@@ -921,7 +922,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               </div>
             ))}
 
-            <button
+            <AppButton
               className="px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 hover:bg-gray-100"
               type="button"
               onClick={() =>
@@ -939,7 +940,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               }
             >
               添加其他线路
-            </button>
+            </AppButton>
           </div>
         </div>
       </div>
@@ -957,7 +958,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs opacity-70">可选：导入下行站台点坐标到当前工作区。</div>
-            <button
+            <AppButton
               className={`px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
                 plfDownPoint.length ? 'hover:bg-gray-100' : 'opacity-50 cursor-not-allowed'
               }`}
@@ -966,7 +967,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               onClick={() => bridgeRef.current.setTempPoints(plfDownPoint)}
             >
               导入下行站台点
-            </button>
+            </AppButton>
           </div>
 
           <LabeledInput label="站台号" value={plfNoUp} onChange={setPlfNoUp} placeholder="例如：1" />
@@ -983,13 +984,13 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold">线路条目 #{idx + 1}</div>
                   {idx > 0 ? (
-                    <button
+                    <AppButton
                       className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100"
                       type="button"
                       onClick={() => setPlfLinesUp((p) => p.filter((_, i) => i !== idx))}
                     >
                       删除
-                    </button>
+                    </AppButton>
                   ) : null}
                 </div>
 
@@ -1093,7 +1094,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               </div>
             ))}
 
-            <button
+            <AppButton
               className="px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 hover:bg-gray-100"
               type="button"
               onClick={() =>
@@ -1111,7 +1112,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               }
             >
               添加其他线路
-            </button>
+            </AppButton>
           </div>
         </div>
       </div>
@@ -1130,7 +1131,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
 
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <button
+            <AppButton
               className={`px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
                 plfDownPoint.length ? 'hover:bg-gray-100' : 'opacity-50 cursor-not-allowed'
               }`}
@@ -1139,8 +1140,8 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               onClick={() => bridgeRef.current.setTempPoints(plfDownPoint)}
             >
               导入下行站台点
-            </button>
-            <button
+            </AppButton>
+            <AppButton
               className={`px-3 py-2 rounded text-sm border border-gray-300 bg-white text-gray-900 ${
                 plfUpPoint.length ? 'hover:bg-gray-100' : 'opacity-50 cursor-not-allowed'
               }`}
@@ -1149,7 +1150,7 @@ export default function StationWorkflow(props: WorkflowComponentProps) {
               onClick={() => bridgeRef.current.setTempPoints(plfUpPoint)}
             >
               导入上行站台点
-            </button>
+            </AppButton>
           </div>
 
           {stbSkipped ? (

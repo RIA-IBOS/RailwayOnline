@@ -4,6 +4,7 @@
  */
 
 import { Globe } from 'lucide-react';
+import AppButton from '@/components/ui/AppButton';
 
 interface World {
   id: string;
@@ -26,7 +27,7 @@ export function WorldSwitcher({
     <div className="flex items-center gap-1 mt-2">
       <Globe className="w-4 h-4 text-gray-400 mr-1" />
       {worlds.map(world => (
-        <button
+        <AppButton
           key={world.id}
           onClick={() => onWorldChange(world.id)}
           className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
@@ -36,7 +37,7 @@ export function WorldSwitcher({
           }`}
         >
           {world.name}
-        </button>
+        </AppButton>
       ))}
     </div>
   );

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, type ComponentType } from 'react';
 import * as L from 'leaflet';
 
 import type { FeatureKey, DrawMode } from '@/components/Mapping/featureFormats';
+import AppButton from '@/components/ui/AppButton';
 
 /** 与 MeasuringModule 内部一致的世界坐标点 */
 export type WorldPoint = { x: number; z: number; y?: number };
@@ -124,7 +125,7 @@ export default function WorkflowHost(props: WorkflowHostProps) {
           当前选择的工作流 key：<span className="font-mono">{workflowKey}</span>
         </div>
         <div className="mt-3">
-          <button
+          <AppButton
             type="button"
             className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"
             onClick={() => {
@@ -136,7 +137,7 @@ export default function WorkflowHost(props: WorkflowHostProps) {
             }}
           >
             返回工作流选择
-          </button>
+          </AppButton>
         </div>
       </div>
     );

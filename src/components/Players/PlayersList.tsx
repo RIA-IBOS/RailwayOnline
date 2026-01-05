@@ -9,6 +9,8 @@ import { X, MapPin, Navigation, RefreshCw, Users } from 'lucide-react';
 import type { Player } from '@/types';
 import { fetchPlayers } from '@/lib/playerApi';
 import { getPlayerAvatarUrl } from '@/components/Map/PlayerLayer';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface PlayersListProps {
   worldId: string;
@@ -43,7 +45,7 @@ export function PlayersList({
   }, [loadPlayers]);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[50vh] flex flex-col">
+    <AppCard className="w-full sm:w-72 max-h-[50vh] flex flex-col">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -54,20 +56,20 @@ export function PlayersList({
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <AppButton
             onClick={loadPlayers}
             disabled={loading}
             className={`p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 ${loading ? 'animate-spin' : ''}`}
             title="刷新"
           >
             <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             onClick={onClose}
             className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
           >
             <X className="w-4 h-4" />
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -93,7 +95,7 @@ export function PlayersList({
           </div>
         )}
       </div>
-    </div>
+    </AppCard>
   );
 }
 
@@ -114,7 +116,7 @@ function PlayerItem({ player, worldId, onSelect, onNavigate }: PlayerItemProps) 
   return (
     <div className="px-3 py-2 hover:bg-gray-50 flex items-center gap-3">
       {/* 头像 */}
-      <button
+      <AppButton
         onClick={() => onSelect?.(player)}
         className="flex-shrink-0 hover:opacity-80 transition-opacity"
       >
@@ -126,16 +128,16 @@ function PlayerItem({ player, worldId, onSelect, onNavigate }: PlayerItemProps) 
             (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2306b6d4"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>';
           }}
         />
-      </button>
+      </AppButton>
 
       {/* 信息 */}
       <div className="flex-1 min-w-0">
-        <button
+        <AppButton
           onClick={() => onSelect?.(player)}
           className="text-sm font-medium text-gray-800 hover:text-cyan-600 transition-colors block truncate"
         >
           {player.name}
-        </button>
+        </AppButton>
         <div className="flex items-center gap-2 mt-0.5">
           {/* 生命值小条 */}
           <div className="w-12 h-1 bg-gray-200 rounded-full overflow-hidden">
@@ -152,21 +154,21 @@ function PlayerItem({ player, worldId, onSelect, onNavigate }: PlayerItemProps) 
 
       {/* 操作按钮 */}
       <div className="flex items-center gap-1">
-        <button
+        <AppButton
           onClick={() => onSelect?.(player)}
           className="p-1.5 hover:bg-gray-200 rounded text-gray-400 hover:text-cyan-600"
           title="定位"
         >
           <MapPin className="w-4 h-4" />
-        </button>
+        </AppButton>
         {onNavigate && (
-          <button
+          <AppButton
             onClick={() => onNavigate(player)}
             className="p-1.5 hover:bg-gray-200 rounded text-gray-400 hover:text-blue-600"
             title="导航"
           >
             <Navigation className="w-4 h-4" />
-          </button>
+          </AppButton>
         )}
       </div>
     </div>

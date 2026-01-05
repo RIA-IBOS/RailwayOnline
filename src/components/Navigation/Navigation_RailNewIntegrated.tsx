@@ -87,15 +87,13 @@ export async function listRailNewStaBuildingsForSearch(opt: {
   filesOverride?: string[];
   fetcher?: (url: string) => Promise<any[]>;
 }): Promise<RailNewStaBuildingSearchItem[]> {
-  const all = await loadRuleItems(opt.worldId, {
+  const { buildings, stas } = await loadRuleParsed(opt.worldId, {
     dataSourceOverride: opt.dataSourceOverride,
     filesOverride: opt.filesOverride,
     fetcher: opt.fetcher,
     strict: true,
   });
 
-  const buildings = parseBuildings(all);
-	const stas = parseSta(all);
 	const idx = buildStationBuildingIndex(stas, buildings);
 
   const out: RailNewStaBuildingSearchItem[] = [];
@@ -222,6 +220,18 @@ export type NavigationRailComputeOptions = {
 // ------------------------------
 
 type RawItem = any;
+
+type RuleParsedBundle = {
+  items: RawItem[];
+  stas: Map<string, Sta>;
+  plfs: Map<string, Plf>;
+  rles: Map<string, Rle>;
+  buildings: Map<string, Building>;
+};
+
+const RULE_ITEMS_CACHE = new Map<string, RawItem[]>();
+const RULE_ITEMS_PENDING = new Map<string, Promise<RawItem[]>>();
+const RULE_PARSED_CACHE = new Map<string, RuleParsedBundle>();
 
 type Sta = {
   stationID: string;
@@ -566,7 +576,12 @@ type RuleLoadOptions = Pick<NavigationRailComputeOptions, 'dataSourceOverride' |
   strict?: boolean;
 };
 
-async function loadRuleItems(worldId: string, opt: RuleLoadOptions): Promise<any[]> {
+function makeRuleCacheKey(wid: string, merged: WorldRuleDataSource): string {
+  const files = Array.isArray(merged.files) ? merged.files : [];
+  return `${wid}::${merged.baseUrl ?? ''}::${files.join('|')}`;
+}
+
+function resolveRuleSource(worldId: string, opt: RuleLoadOptions) {
   const wid = normalizeWorldId(worldId);
   const base = RULE_DATA_SOURCES[wid];
 
@@ -575,8 +590,40 @@ async function loadRuleItems(worldId: string, opt: RuleLoadOptions): Promise<any
     files: opt.filesOverride ?? opt.dataSourceOverride?.files ?? base?.files ?? [],
   };
 
+  const cacheKey = makeRuleCacheKey(wid, merged);
+  return { wid, merged, cacheKey };
+}
+
+async function loadRuleItems(worldId: string, opt: RuleLoadOptions): Promise<any[]> {
+  const { wid, merged, cacheKey } = resolveRuleSource(worldId, opt);
+
   if (opt.strict && merged.files.length === 0) {
     throw new Error(`RULE_DATA_SOURCES[${wid}] 未配置 files（worldId=${worldId} -> ${wid}），无法加载 STB/STA/PLF/RLE`);
+  }
+
+  const allowCache = !opt.fetcher;
+  if (allowCache) {
+    const cached = RULE_ITEMS_CACHE.get(cacheKey);
+    if (cached) {
+      if (opt.strict && cached.length === 0) {
+        throw new Error(
+          `未能从任何文件加载到 Rule JSON（worldId=${worldId} -> ${wid}）。` +
+            `请检查 baseUrl=${merged.baseUrl} 与 files 是否 404/路径不一致。`
+        );
+      }
+      return cached;
+    }
+    const pending = RULE_ITEMS_PENDING.get(cacheKey);
+    if (pending) {
+      const items = await pending;
+      if (opt.strict && items.length === 0) {
+        throw new Error(
+          `未能从任何文件加载到 Rule JSON（worldId=${worldId} -> ${wid}）。` +
+            `请检查 baseUrl=${merged.baseUrl} 与 files 是否 404/路径不一致。`
+        );
+      }
+      return items;
+    }
   }
 
   const fetcher = opt.fetcher ?? defaultFetcher;
@@ -584,26 +631,65 @@ async function loadRuleItems(worldId: string, opt: RuleLoadOptions): Promise<any
 
   let loadedAnyFile = false;
 
-  for (const file of merged.files) {
-    const url = `${merged.baseUrl.replace(/\/$/, '')}/${file}`;
-    try {
-      const arr = await fetcher(url);
+  const loadPromise = (async () => {
+    const results = await Promise.all(
+      merged.files.map(async (file) => {
+        const url = `${merged.baseUrl.replace(/\/$/, '')}/${file}`;
+        try {
+          const arr = await fetcher(url);
+          return Array.isArray(arr) ? arr : [];
+        } catch {
+          // 允许单文件失败不中断（与 RuleLayer 行为一致）
+          return [];
+        }
+      })
+    );
+
+    for (const arr of results) {
       if (arr.length > 0) loadedAnyFile = true;
       for (const it of arr) items.push(it);
-    } catch {
-      // 允许单文件失败不中断（与 RuleLayer 行为一致）
-      continue;
     }
+
+    if (opt.strict && !loadedAnyFile) {
+      throw new Error(
+        `未能从任何文件加载到 Rule JSON（worldId=${worldId} -> ${wid}）。` +
+          `请检查 baseUrl=${merged.baseUrl} 与 files 是否 404/路径不一致。`
+      );
+    }
+
+    return items;
+  })();
+
+  if (allowCache) RULE_ITEMS_PENDING.set(cacheKey, loadPromise);
+
+  try {
+    const result = await loadPromise;
+    if (allowCache) RULE_ITEMS_CACHE.set(cacheKey, result);
+    return result;
+  } finally {
+    if (allowCache) RULE_ITEMS_PENDING.delete(cacheKey);
+  }
+}
+
+async function loadRuleParsed(worldId: string, opt: RuleLoadOptions): Promise<RuleParsedBundle> {
+  const { cacheKey } = resolveRuleSource(worldId, opt);
+  const allowCache = !opt.fetcher;
+  if (allowCache) {
+    const cached = RULE_PARSED_CACHE.get(cacheKey);
+    if (cached) return cached;
   }
 
-  if (opt.strict && !loadedAnyFile) {
-    throw new Error(
-      `未能从任何文件加载到 Rule JSON（worldId=${worldId} -> ${wid}）。` +
-        `请检查 baseUrl=${merged.baseUrl} 与 files 是否 404/路径不一致。`
-    );
-  }
+  const items = await loadRuleItems(worldId, opt);
+  const parsed: RuleParsedBundle = {
+    items,
+    stas: parseSta(items),
+    plfs: parsePlf(items),
+    rles: parseRle(items),
+    buildings: parseBuildings(items),
+  };
 
-  return items;
+  if (allowCache) RULE_PARSED_CACHE.set(cacheKey, parsed);
+  return parsed;
 }
 
 
@@ -1838,12 +1924,7 @@ export async function computeRailPlanBetweenBuildings(opt: NavigationRailCompute
   const stationTransferCostDivisor = opt.stationTransferCostDivisor ?? 10;
   const normalSamePlatformTransferCost = opt.normalSamePlatformTransferCost ?? 30; // seconds
 
-  const all = await loadRuleItems(opt.worldId, opt);
-
-  const stas = parseSta(all);
-  const plfs = parsePlf(all);
-  const rles = parseRle(all);
-  const buildings = parseBuildings(all);
+  const { stas, plfs, rles, buildings } = await loadRuleParsed(opt.worldId, opt);
 
   const startBuilding = buildings.get(opt.startBuildingId);
   const endBuilding = buildings.get(opt.endBuildingId);
@@ -1999,11 +2080,7 @@ export async function computeRailPlanFromCoords(opt: NavigationRailNewIntegrated
   const stationTransferCostDivisor = opt.stationTransferCostDivisor ?? 10;
   const normalSamePlatformTransferCost = opt.normalSamePlatformTransferCost ?? 30; // seconds
 
-  const all = await loadRuleItems(opt.worldId, opt);
-  const stas = parseSta(all);
-  const plfs = parsePlf(all);
-  const rles = parseRle(all);
-  const buildings = parseBuildings(all);
+  const { stas, plfs, rles, buildings } = await loadRuleParsed(opt.worldId, opt);
 
   const startBuilding =
     (opt.startBuildingId ? buildings.get(opt.startBuildingId) : null) ?? nearestBuildingForCoord(buildings, opt.startCoord);

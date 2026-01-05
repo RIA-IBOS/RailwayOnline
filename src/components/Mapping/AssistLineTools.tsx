@@ -14,6 +14,7 @@ import 'leaflet/dist/leaflet.css';
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
 import { Link, X } from 'lucide-react';
+import AppButton from '@/components/ui/AppButton';
 
 export type WorldPoint = { x: number; z: number };
 
@@ -571,7 +572,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
   return (
     <div className="mt-2">
       {/* “辅助线”按钮 */}
-      <button
+      <AppButton
         type="button"
         className={`w-full px-3 py-1.5 rounded text-sm border flex items-center gap-2 ${
           enabled ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300'
@@ -596,7 +597,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
       >
         <Link size={16} />
         {enabled ? `辅助线(启用中), 当前目标: ${target?.label ?? '未选择'}` : '辅助线'}
-      </button>
+      </AppButton>
 
       {/* 状态文本（可选） */}
       {statusText && <div className="mt-2 text-xs text-gray-700">{statusText}</div>}
@@ -607,7 +608,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
           <div className="bg-white border rounded shadow-md w-80">
             <div className="flex items-center justify-between px-3 py-2 border-b">
               <div className="text-sm font-semibold">辅助线</div>
-              <button
+              <AppButton
                 type="button"
                 className="p-1 rounded hover:bg-gray-100"
                 onClick={() => {
@@ -617,7 +618,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                 title="关闭"
               >
                 <X size={16} />
-              </button>
+              </AppButton>
             </div>
 
             <div className="p-3 space-y-3">
@@ -640,21 +641,21 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                   placeholder="例如 20"
                   inputMode="decimal"
                 />
-                <button
+                <AppButton
                   type="button"
                   className="px-2 py-1 rounded text-xs border bg-white text-gray-800 border-gray-300 hover:bg-gray-50"
                   onClick={applyThreshold}
                   title="应用阈值"
                 >
                   应用
-                </button>
+                </AppButton>
               </div>
 
               {/* 模式切换（对齐点/线/面切换样式） */}
               <div>
                 <div className="flex gap-2">
                   {modeButtons.map((m) => (
-                    <button
+                    <AppButton
                       key={m.key}
                       type="button"
                       className={`flex-1 py-1 border text-sm ${mode === m.key ? 'bg-blue-300' : ''}`}
@@ -666,7 +667,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                       }}
                     >
                       {m.label}
-                    </button>
+                    </AppButton>
                   ))}
                 </div>
 
@@ -693,14 +694,14 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                         inputMode="decimal"
                       />
 
-                      <button
+                      <AppButton
                         type="button"
                         className="px-2 py-1 rounded text-xs border bg-white text-gray-800 border-gray-300 hover:bg-gray-50"
                         onClick={applyFixedLine}
                         title="应用固定直线"
                       >
                         应用
-                      </button>
+                      </AppButton>
                     </div>
                   </div>
                 )}
@@ -732,14 +733,14 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                         inputMode="decimal"
                       />
 
-                      <button
+                      <AppButton
                         type="button"
                         className="px-2 py-1 rounded text-xs border bg-white text-gray-800 border-gray-300 hover:bg-gray-50"
                         onClick={applyCoordSystem}
                         title="应用参考坐标系"
                       >
                         应用
-                      </button>
+                      </AppButton>
                     </div>
                   </div>
                 )}
@@ -749,7 +750,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                     <div className="text-xs text-gray-600">从地图中选择一条线/面要素作为参考线。</div>
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <AppButton
                         type="button"
                         className={`px-2 py-1 rounded text-xs border ${
                           picking ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-800 border-gray-300'
@@ -758,7 +759,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                         title="选择图层"
                       >
                         选择图层
-                      </button>
+                      </AppButton>
                       <div className="text-[11px] text-gray-500">点击地图中的线/面要素即可设为辅助线</div>
                     </div>
                   </div>
@@ -772,7 +773,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
 
               {/* 清除/退出：不受模式影响，置于当前目标和说明中间 */}
               <div className="flex items-center gap-2">
-                <button
+                <AppButton
                   type="button"
                   className="px-2 py-1 rounded text-xs bg-gray-200 text-gray-900"
                   onClick={() => {
@@ -783,9 +784,9 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                   title="清除目标"
                 >
                   清除目标
-                </button>
+                </AppButton>
 
-                <button
+                <AppButton
                   type="button"
                   className={`px-2 py-1 rounded text-xs bg-gray-200 text-gray-900 ${
                     picking ? '' : 'opacity-50 cursor-not-allowed'
@@ -798,7 +799,7 @@ export default forwardRef<AssistLineToolsHandle, AssistLineToolsProps>(function 
                   title={picking ? '退出要素选择模式' : '当前未在选择模式'}
                 >
                   退出选择
-                </button>
+                </AppButton>
               </div>
 
               {/* 说明 */}

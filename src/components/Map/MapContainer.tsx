@@ -35,6 +35,8 @@ import RuleDrivenLayer from '@/components/Rules/RuleDrivenLayer';
 import RuleLayerToggle from '@/components/Rules/RuleLayerToggle';
 
 import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/GridSnapModeSwitch';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 
 // 世界配置
@@ -99,6 +101,12 @@ const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
   dynmap: 1001,
   ruleLayers: 1001,
   music: 1001,
+  about: 1001,
+  settings: 1001,
+  players: 1001,
+  lineDetail: 1001,
+  pointDetail: 1001,
+  playerDetail: 1001,
 });
 
   const zIndexCounterRef = useRef(1001);
@@ -148,7 +156,7 @@ let newTileLayer: L.TileLayer;
 const tileLayerOptions = {
   minZoom: -3,
   maxZoom: map.getMaxZoom(), // =5
-  minNativeZoom: 0,
+  minNativeZoom: -2,
   maxNativeZoom: 3
 };
 
@@ -381,7 +389,7 @@ const handleRouteFound = useCallback((route: RouteHighlightData | Array<{ coord:
 const tileLayerOptions = {
   minZoom: -3,
   maxZoom: map.getMaxZoom(), // =5
-  minNativeZoom: 0,
+  minNativeZoom: -2,
   maxNativeZoom: 3
 };
 
@@ -461,7 +469,7 @@ const map = L.map(mapRef.current, {
 const tileLayerOptions = {
   minZoom: -3,
   maxZoom: projection.maxZoom, // 5
-  minNativeZoom: 0,            // 关键：zoom<0 时用 0 级瓦片缩放显示
+  minNativeZoom: -2,           // 允许请求 zzzz/zzzzz（zoom<0 时仍命中真实瓦片）
   maxNativeZoom: 3             // 保持你现有 Dynmap 行为
 };
 
@@ -505,7 +513,17 @@ if (savedMapStyle === 'sketch') {
     coordControl.addTo(map);
 
     // 监听鼠标移动，更新坐标显示
-map.on('mousemove', (e: L.LeafletMouseEvent) => {
+const coordDiv = coordControl.getContainer?.() ?? document.querySelector('.coord-display');
+let rafId: number | null = null;
+let latestCoord: { x: number; z: number } | null = null;
+
+const flushCoord = () => {
+  if (!coordDiv || !latestCoord) return;
+  coordDiv.innerHTML = `X: ${formatGridNumber(latestCoord.x)}, Z: ${formatGridNumber(latestCoord.z)}`;
+  rafId = null;
+};
+
+const handleMouseMove = (e: L.LeafletMouseEvent) => {
   const proj = projectionRef.current;
   if (!proj) return;
 
@@ -513,12 +531,14 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
 
   // 与测绘控件保持一致：坐标显示也遵循“方块中心(.5)/方块边缘(.0)/自动(.5步进)”
   const snapped = snapWorldPointByMode({ x: worldCoord.x, z: worldCoord.z });
+  latestCoord = snapped;
 
-  const coordDiv = document.querySelector('.coord-display');
-  if (coordDiv) {
-    coordDiv.innerHTML = `X: ${formatGridNumber(snapped.x)}, Z: ${formatGridNumber(snapped.z)}`;
+  if (rafId === null) {
+    rafId = window.requestAnimationFrame(flushCoord);
   }
-});
+};
+
+map.on('mousemove', handleMouseMove);
 
 
     leafletMapRef.current = map;
@@ -526,6 +546,8 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
 
     // 清理函数
     return () => {
+      map.off('mousemove', handleMouseMove);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
@@ -610,14 +632,14 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
       {/* 左侧面板区域 */}
       <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-auto z-[1000] flex flex-col gap-2 sm:max-w-[300px]">
         {/* 标题和世界切换 */}
-        <div className="bg-white/90 px-3 py-2 sm:px-4 rounded-lg shadow-lg">
+        <AppCard className="bg-white/90 px-3 py-2 sm:px-4">
           <h1 className="text-base sm:text-lg font-bold text-gray-800">RIA 在线地图</h1>
           <WorldSwitcher
             worlds={WORLDS}
             currentWorld={currentWorld}
             onWorldChange={handleWorldChange}
           />
-        </div>
+        </AppCard>
 
         {/* 搜索栏 */}
         <SearchBar
@@ -740,7 +762,7 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
 
         {/* 清除路径按钮 */}
 {hasRoute && (
-  <button
+  <AppButton
     onClick={() => setRouteHighlight(null)}
     className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
   >
@@ -748,7 +770,7 @@ map.on('mousemove', (e: L.LeafletMouseEvent) => {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
     <span>清除路径</span>
-  </button>
+  </AppButton>
 )}
 
       </div>

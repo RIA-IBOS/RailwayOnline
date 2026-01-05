@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import AppButton from '@/components/ui/AppButton';
 
 /**
  * Grid snap mode:
@@ -111,12 +112,12 @@ export default function GridSnapModeSwitch() {
 
   return (
     <div className="flex gap-2" title={hint}>
-      <button type="button" className={`${btnBase} ${centerOn ? onCls : offCls}`} onClick={toggleCenter}>
+      <AppButton type="button" className={`${btnBase} ${centerOn ? onCls : offCls}`} onClick={toggleCenter}>
         方块中心(.5)
-      </button>
-      <button type="button" className={`${btnBase} ${edgeOn ? onCls : offCls}`} onClick={toggleEdge}>
+      </AppButton>
+      <AppButton type="button" className={`${btnBase} ${edgeOn ? onCls : offCls}`} onClick={toggleEdge}>
         方块边缘(.0)
-      </button>
+      </AppButton>
     </div>
   );
 }

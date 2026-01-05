@@ -4,6 +4,9 @@ import 'leaflet/dist/leaflet.css';
 import type { DynmapProjection } from '@/lib/DynmapProjection';
 import DraggablePanel from '../DraggablePanel/DraggablePanel';
 import { Ruler, X } from 'lucide-react';
+import ToolIconButton from '@/components/Toolbar/ToolIconButton';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 
 type WorldPoint = { x: number; z: number };
@@ -692,17 +695,14 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
           注意：为了“紧挨右上角 bar 左侧”，这里用了一个经验 right 偏移值。
           如果仍与右上角 LayerControl 重叠，把 sm:right-[260px] 这个数调大/调小即可。 */}
       <div className="hidden sm:block absolute bottom-8 right-2 sm:top-4 sm:bottom-auto sm:right-[260px] z-[1001]">
-        <button
+        <ToolIconButton
+          label="测量工具"
+          icon={<Ruler className="w-5 h-5" />}
+          active={active}
+          tone="blue"
+          shadow
           onClick={handleMainToggle}
-          className={`relative group flex flex-col items-center p-2 rounded-lg transition-colors ${
-            active ? 'bg-blue-50 text-blue-600' : 'bg-white/90 text-gray-700 hover:bg-gray-100'
-          } shadow-lg`}
-        >
-          <Ruler className="w-5 h-5" />
-          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-            测量工具
-          </span>
-        </button>
+        />
       </div>
 
       {/* =========================
@@ -710,13 +710,13 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
          ========================= */}
       {active && (
         <DraggablePanel id="mtools-main" defaultPosition={{ x: 16, y: 180 }} zIndex={2200}>
-          <div className="bg-white rounded-xl shadow-lg w-[520px] max-h-[70vh] overflow-hidden">
+          <AppCard className="w-[520px] max-h-[70vh] overflow-hidden">
             {/* 标题栏（用于拖拽区域，右侧留出关闭按钮） */}
             <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
               <h3 className="font-bold text-gray-800">测量工具</h3>
-              <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+              <AppButton onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
 
             {/* 内容区 */}
@@ -724,39 +724,39 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
               {/* tabs + 清空 */}
               <div className="flex items-center gap-2">
                 <div className="flex border rounded-lg overflow-hidden">
-                  <button
+                  <AppButton
                     className={`px-4 py-2 text-sm transition-colors ${
                       mainTab === 'measure' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'
                     }`}
                     onClick={() => setMainTab('measure')}
                   >
                     测量
-                  </button>
-                  <button
+                  </AppButton>
+                  <AppButton
                     className={`px-4 py-2 text-sm transition-colors ${
                       mainTab === 'shape' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'
                     }`}
                     onClick={() => setMainTab('shape')}
                   >
                     形状
-                  </button>
-                  <button
+                  </AppButton>
+                  <AppButton
                     className={`px-4 py-2 text-sm transition-colors ${
                       mainTab === 'analysis' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'
                     }`}
                     onClick={() => setMainTab('analysis')}
                   >
                     分析
-                  </button>
+                  </AppButton>
                 </div>
 
                 <div className="ml-auto">
-                  <button
+                  <AppButton
                     className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
                     onClick={clearAllLayers}
                   >
                     清空本工具图层
-                  </button>
+                  </AppButton>
                 </div>
               </div>
 
@@ -799,28 +799,28 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
+                    <AppButton
                       className={`px-3 py-2 rounded-lg text-sm transition-colors ${
                         shapeKind === 'circle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       onClick={() => setShapeKind('circle')}
                     >
                       圆
-                    </button>
-                    <button
+                    </AppButton>
+                    <AppButton
                       className={`px-3 py-2 rounded-lg text-sm transition-colors ${
                         shapeKind === 'square' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                       onClick={() => setShapeKind('square')}
                     >
                       方形
-                    </button>
-                    <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed text-sm" disabled>
+                    </AppButton>
+                    <AppButton className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed text-sm" disabled>
                       多边形:未实装
-                    </button>
-                    <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed text-sm" disabled>
+                    </AppButton>
+                    <AppButton className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed text-sm" disabled>
                       曲线(未实装)
-                    </button>
+                    </AppButton>
                   </div>
                 </div>
               )}
@@ -830,23 +830,23 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                 <div className="space-y-3">
                   <div className="text-sm text-gray-700">分析模块预留接口（当前未实装）。</div>
                   <div className="flex items-center gap-2">
-                    <button
+                    <AppButton
                       className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
                       onClick={runSpatialRelationAnalysis}
                     >
                       空间关系
-                    </button>
-                    <button
+                    </AppButton>
+                    <AppButton
                       className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
                       onClick={runAttributeQuery}
                     >
                       属性查询
-                    </button>
+                    </AppButton>
                   </div>
                 </div>
               )}
             </div>
-          </div>
+          </AppCard>
         </DraggablePanel>
       )}
 
@@ -856,12 +856,12 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
          ========================= */}
       {active && (
         <DraggablePanel id="mtools-results" defaultPosition={{ x: 16, y: 520 }} zIndex={2200}>
-          <div className="bg-white rounded-xl shadow-lg w-[520px] overflow-hidden">
+          <AppCard className="w-[520px] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-bold text-gray-800">测量结果</h3>
-              <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+              <AppButton onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
             <div className="p-3">
               <textarea
@@ -871,7 +871,7 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                 placeholder="这里仅显示：Layer n + 面积/距离"
               />
             </div>
-          </div>
+          </AppCard>
         </DraggablePanel>
       )}
 
@@ -881,49 +881,49 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
       {active && (
         <>
           <div className="hidden fixed left-2 right-2 bottom-40 z-[2200]">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <AppCard className="overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-bold text-gray-800">测量工具</h3>
-                <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+                <AppButton onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
                   <X className="w-5 h-5" />
-                </button>
+                </AppButton>
               </div>
 
               <div className="p-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="flex border rounded-lg overflow-hidden flex-1">
-                    <button
+                    <AppButton
                       className={`flex-1 px-4 py-2 text-sm transition-colors ${
                         mainTab === 'measure' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600'
                       }`}
                       onClick={() => setMainTab('measure')}
                     >
                       测量
-                    </button>
-                    <button
+                    </AppButton>
+                    <AppButton
                       className={`flex-1 px-4 py-2 text-sm transition-colors ${
                         mainTab === 'shape' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600'
                       }`}
                       onClick={() => setMainTab('shape')}
                     >
                       形状
-                    </button>
-                    <button
+                    </AppButton>
+                    <AppButton
                       className={`flex-1 px-4 py-2 text-sm transition-colors ${
                         mainTab === 'analysis' ? 'bg-blue-50 text-blue-600' : 'bg-white text-gray-600'
                       }`}
                       onClick={() => setMainTab('analysis')}
                     >
                       分析
-                    </button>
+                    </AppButton>
                   </div>
 
-                  <button
+                  <AppButton
                     className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
                     onClick={clearAllLayers}
                   >
                     清空
-                  </button>
+                  </AppButton>
                 </div>
 
                 {mainTab === 'measure' && (
@@ -955,68 +955,68 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                 {mainTab === 'shape' && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <button
+                      <AppButton
                         className={`px-3 py-2 rounded-lg text-sm transition-colors ${
                           shapeKind === 'circle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'
                         }`}
                         onClick={() => setShapeKind('circle')}
                       >
                         圆
-                      </button>
-                      <button
+                      </AppButton>
+                      <AppButton
                         className={`px-3 py-2 rounded-lg text-sm transition-colors ${
                           shapeKind === 'square' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'
                         }`}
                         onClick={() => setShapeKind('square')}
                       >
                         方形
-                      </button>
-                      <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm" disabled>
+                      </AppButton>
+                      <AppButton className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm" disabled>
                         多边形:未实装
-                      </button>
-                      <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm" disabled>
+                      </AppButton>
+                      <AppButton className="px-3 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm" disabled>
                         曲线(未实装)
-                      </button>
+                      </AppButton>
                     </div>
                   </div>
                 )}
 
                 {mainTab === 'analysis' && (
                   <div className="flex items-center gap-2">
-                    <button
+                    <AppButton
                       className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm"
                       onClick={runSpatialRelationAnalysis}
                     >
                       空间关系
-                    </button>
-                    <button className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm" onClick={runAttributeQuery}>
+                    </AppButton>
+                    <AppButton className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm" onClick={runAttributeQuery}>
                       属性查询
-                    </button>
+                    </AppButton>
                   </div>
                 )}
               </div>
-            </div>
+            </AppCard>
           </div>
 
           <div className="hidden fixed left-2 right-2 bottom-8 z-[2200]">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <AppCard className="overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <h3 className="font-bold text-gray-800">测量结果</h3>
-                <button onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
+                <AppButton onClick={handleClosePanels} className="text-gray-400 hover:text-gray-600">
                   <X className="w-5 h-5" />
-                </button>
+                </AppButton>
               </div>
               <div className="p-3">
                 <textarea className="w-full border rounded-lg p-2 h-24 text-xs" readOnly value={resultsText} />
               </div>
-            </div>
+            </AppCard>
           </div>
         </>
       )}
 
       {/* 图层管理（按你要求：可不做标题栏/拖拽；位置保持不变） */}
       {active && (
-        <div className="fixed top-20 right-4 z-[2100] bg-white p-3 rounded-lg shadow-lg w-[360px] max-h-[75vh] overflow-auto">
+        <AppCard className="fixed top-20 right-4 z-[2100] p-3 w-[360px] max-h-[75vh] overflow-auto">
           <div className="font-semibold mb-2">测量图层管理</div>
 
           {layers.length === 0 && <div className="text-xs text-gray-500">暂无图层</div>}
@@ -1035,24 +1035,24 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                     <div className="text-sm font-medium">Layer {idx + 1}</div>
 
                     <div className="ml-auto flex items-center gap-1">
-                      <button className="px-2 py-1 rounded bg-gray-200" onClick={e => (e.stopPropagation(), moveUp(l.id))}>
+                      <AppButton className="px-2 py-1 rounded bg-gray-200" onClick={e => (e.stopPropagation(), moveUp(l.id))}>
                         ↑
-                      </button>
-                      <button className="px-2 py-1 rounded bg-gray-200" onClick={e => (e.stopPropagation(), moveDown(l.id))}>
+                      </AppButton>
+                      <AppButton className="px-2 py-1 rounded bg-gray-200" onClick={e => (e.stopPropagation(), moveDown(l.id))}>
                         ↓
-                      </button>
-                      <button
+                      </AppButton>
+                      <AppButton
                         className="px-2 py-1 rounded bg-gray-200"
                         onClick={e => (e.stopPropagation(), toggleVisible(l.id))}
                       >
                         {l.visible ? '隐藏' : '显示'}
-                      </button>
-                      <button
+                      </AppButton>
+                      <AppButton
                         className="px-2 py-1 rounded bg-red-600 text-white"
                         onClick={e => (e.stopPropagation(), deleteLayer(l.id))}
                       >
                         删除
-                      </button>
+                      </AppButton>
                     </div>
                   </div>
 
@@ -1079,16 +1079,16 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
               );
             })}
           </div>
-        </div>
+        </AppCard>
       )}
 
       {/* 半径输入弹窗（圆/椭圆）—— 增加标题栏与关闭按钮 */}
       {active && radiusModalOpen && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-lg w-[420px] overflow-hidden">
+          <AppCard className="w-[420px] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-bold text-gray-800">输入圆半径</h3>
-              <button
+              <AppButton
                 onClick={() => {
                   pendingCircleCenterRef.current = null;
                   setRadiusModalOpen(false);
@@ -1096,7 +1096,7 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </AppButton>
             </div>
 
             <div className="p-4">
@@ -1120,7 +1120,7 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
               </div>
 
               <div className="flex items-center justify-end gap-2 mt-4">
-                <button
+                <AppButton
                   className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm"
                   onClick={() => {
                     pendingCircleCenterRef.current = null;
@@ -1128,19 +1128,18 @@ export default function MeasurementToolsModule(props: MeasurementToolsModuleProp
                   }}
                 >
                   取消
-                </button>
-                <button
+                </AppButton>
+                <AppButton
                   className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
                   onClick={confirmCreateEllipse}
                 >
                   确认生成
-                </button>
+                </AppButton>
               </div>
             </div>
-          </div>
+          </AppCard>
         </div>
       )}
     </>
   );
 }
-
