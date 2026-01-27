@@ -8,7 +8,7 @@ import { createWatercolorTileLayer } from '@/lib/SketchTileLayer';
 import { RailwayLayer } from './RailwayLayer';
 import { LandmarkLayer } from './LandmarkLayer';
 import { PlayerLayer } from './PlayerLayer';
-import { RouteHighlightLayer } from './RouteHighlightLayer';
+import { RouteHighlightLayer, type RouteHighlightData } from './RouteHighlightLayer';
 import { LineHighlightLayer } from './LineHighlightLayer';
 import { WorldSwitcher } from './WorldSwitcher';
 import { SearchBar } from '../Search/SearchBar';
@@ -28,6 +28,15 @@ import { fetchPlayers } from '@/lib/playerApi';
 import { loadMapSettings, saveMapSettings, MapStyle } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
+import MeasuringModule from '@/components/Mapping/MeasuringModule';
+import MeasurementToolsModule from '@/components/Mapping/Mtools';
+
+import RuleDrivenLayer from '@/components/Rules/RuleDrivenLayer';
+
+import { formatGridNumber, snapWorldPointByMode } from '@/components/Mapping/GridSnapModeSwitch';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
+
 
 // 世界配置
 const WORLDS = [
@@ -61,7 +70,14 @@ function MapContainer() {
   const [lines, setLines] = useState<ParsedLine[]>([]);
   const [landmarks, setLandmarks] = useState<ParsedLandmark[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [routePath, setRoutePath] = useState<Array<{ coord: Coordinate }> | null>(null);
+  const [routeHighlight, setRouteHighlight] = useState<RouteHighlightData | null>(null);
+  const [showRouteHighlight] = useState(true);
+
+// 是否存在可绘制的路线（用于隐藏图层/显示清除按钮）
+  const hasRoute =
+    routeHighlight?.styledSegments?.some(s => Array.isArray(s.coords) && s.coords.length >= 2) ?? false;
+  const showRouteOverlay = hasRoute && showRouteHighlight;
+
   const [highlightedLine, setHighlightedLine] = useState<ParsedLine | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<{
     type: 'station' | 'landmark';
@@ -71,17 +87,29 @@ function MapContainer() {
     landmark?: ParsedLandmark;
   } | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [measuringCloseSignal, setMeasuringCloseSignal] = useState(0);
+  const [measureToolsCloseSignal, setMeasureToolsCloseSignal] = useState(0);
+  const [showRuleLayers, setShowRuleLayers] = useState(true);
 
   // 面板 z-index 管理（用于置顶）
-  const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
-    navigation: 1001,
-    players: 1001,
-    about: 1001,
-    settings: 1001,
-    lineDetail: 1001,
-    pointDetail: 1001,
-    playerDetail: 1001,
-  });
+const [panelZIndexes, setPanelZIndexes] = useState<Record<string, number>>({
+  info: 1000,
+  navigation: 1001,
+  navigation2: 1001,
+  help: 1000,
+  ruler: 1001,
+  mapStyle: 1001,
+  dynmap: 1001,
+  ruleLayers: 1001,
+  music: 1001,
+  about: 1001,
+  settings: 1001,
+  players: 1001,
+  lineDetail: 1001,
+  pointDetail: 1001,
+  playerDetail: 1001,
+});
+
   const zIndexCounterRef = useRef(1001);
 
   // 置顶面板
@@ -122,15 +150,26 @@ function MapContainer() {
       tileLayerRef.current.remove();
     }
 
-    // 添加新瓦片图层
-    let newTileLayer: L.TileLayer;
-    if (mapStyle === 'sketch') {
-      newTileLayer = createSketchTileLayer(currentWorld, 'flat');
-    } else if (mapStyle === 'watercolor') {
-      newTileLayer = createWatercolorTileLayer(currentWorld, 'flat');
-    } else {
-      newTileLayer = createDynmapTileLayer(currentWorld, 'flat');
-    }
+// 添加新瓦片图层
+let newTileLayer: L.TileLayer;
+
+
+const tileLayerOptions = {
+  minZoom: -3,
+  maxZoom: map.getMaxZoom(), // =5
+  minNativeZoom: -2,
+  maxNativeZoom: 3
+};
+
+if (mapStyle === 'sketch') {
+  newTileLayer = createSketchTileLayer(currentWorld, 'flat', tileLayerOptions);
+} else if (mapStyle === 'watercolor') {
+  newTileLayer = createWatercolorTileLayer(currentWorld, 'flat', tileLayerOptions);
+} else {
+  newTileLayer = createDynmapTileLayer(currentWorld, 'flat', tileLayerOptions);
+}
+
+
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
   }, [mapStyle, mapReady, currentWorld]);
@@ -193,8 +232,9 @@ function MapContainer() {
     fetchPlayers(currentWorld).then(setPlayers);
 
     // 清除之前的路径
-    setRoutePath(null);
+    setRouteHighlight(null);
     setHighlightedLine(null);
+
   }, [currentWorld, dataLoaded, getWorldData]);
 
   // 搜索结果选中处理
@@ -211,7 +251,7 @@ function MapContainer() {
   const handleLineSelect = useCallback((line: ParsedLine) => {
     if (!showRailway) setShowRailway(true);
     setHighlightedLine(line);
-    setRoutePath(null);  // 清除路径规划
+    setRouteHighlight(null);  // 清除路径规划
     setSelectedPoint(null);  // 清除点位选中
 
     const map = leafletMapRef.current;
@@ -297,20 +337,39 @@ function MapContainer() {
   }, [stations, landmarks]);
 
   // 导航路径找到时的处理
-  const handleRouteFound = useCallback((path: Array<{ coord: Coordinate }>) => {
-    setRoutePath(path);
-    setHighlightedLine(null);  // 清除线路高亮
+const handleRouteFound = useCallback((route: RouteHighlightData | Array<{ coord: Coordinate }>) => {
+  setHighlightedLine(null); // 清除线路高亮
 
-    // 计算路径边界并调整地图视图
-    const map = leafletMapRef.current;
-    const proj = projectionRef.current;
-    if (!map || !proj || path.length === 0) return;
+  // 统一归一化为 RouteHighlightData
+  let rh: RouteHighlightData | null = null;
 
-    const bounds = L.latLngBounds(
-      path.map(p => proj.locationToLatLng(p.coord.x, p.coord.y || 64, p.coord.z))
-    );
-    map.fitBounds(bounds, { padding: [50, 50] });
-  }, []);
+  if (Array.isArray(route)) {
+    const coords = route.map(p => p.coord).filter(Boolean);
+    rh = coords.length >= 2 ? { styledSegments: [{ kind: 'generic', coords }] } : null;
+  } else {
+    rh = route;
+  }
+
+  setRouteHighlight(rh);
+
+  // 计算边界并调整视图
+  const map = leafletMapRef.current;
+  const proj = projectionRef.current;
+  if (!map || !proj || !rh?.styledSegments?.length) return;
+
+  const allCoords: Coordinate[] = [];
+  for (const seg of rh.styledSegments) {
+    if (!Array.isArray(seg.coords)) continue;
+    for (const c of seg.coords) allCoords.push(c);
+  }
+  if (allCoords.length === 0) return;
+
+  const bounds = L.latLngBounds(
+    allCoords.map(c => proj.locationToLatLng(c.x, c.y || 64, c.z))
+  );
+  map.fitBounds(bounds, { padding: [50, 50] });
+}, []);
+
 
   // 世界切换处理
   const handleWorldChange = useCallback((worldId: string) => {
@@ -328,13 +387,22 @@ function MapContainer() {
 
     // 添加新瓦片图层（根据当前风格选择）
     let newTileLayer: L.TileLayer;
-    if (mapStyle === 'sketch') {
-      newTileLayer = createSketchTileLayer(worldId, 'flat');
-    } else if (mapStyle === 'watercolor') {
-      newTileLayer = createWatercolorTileLayer(worldId, 'flat');
-    } else {
-      newTileLayer = createDynmapTileLayer(worldId, 'flat');
-    }
+const tileLayerOptions = {
+  minZoom: -3,
+  maxZoom: map.getMaxZoom(), // =5
+  minNativeZoom: -2,
+  maxNativeZoom: 3
+};
+
+if (mapStyle === 'sketch') {
+  newTileLayer = createSketchTileLayer(worldId, 'flat', tileLayerOptions);
+} else if (mapStyle === 'watercolor') {
+  newTileLayer = createWatercolorTileLayer(worldId, 'flat', tileLayerOptions);
+} else {
+  newTileLayer = createDynmapTileLayer(worldId, 'flat', tileLayerOptions);
+}
+
+
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
 
@@ -371,16 +439,27 @@ function MapContainer() {
       Number(world.center.z)
     );
 
-    // 创建地图
-    const map = L.map(mapRef.current, {
-      crs: crs,
-      center: centerLatLng,
-      zoom: 2,
-      minZoom: 0,
-      maxZoom: projection.maxZoom,
-      zoomControl: false,  // 禁用默认缩放控件，稍后自定义位置
-      attributionControl: true
-    });
+const minZoom = -3;                 // 9级：-3..5
+const maxZoom = projection.maxZoom; // 仍然是 5
+
+const map = L.map(mapRef.current, {
+  crs: crs,
+  center: centerLatLng,
+  zoom: 2,
+  minZoom,
+  maxZoom,
+
+  // 明确锁定“整数缩放”
+  zoomSnap: 1,
+  zoomDelta: 1,
+
+  zoomControl: false,
+  attributionControl: true
+});
+
+
+
+
 
     // 添加缩放控件 - 桌面端右下角，手机端左下角
     const isDesktop = window.innerWidth >= 640;
@@ -388,14 +467,23 @@ function MapContainer() {
 
     // 添加 Dynmap 瓦片图层 - 使用保存的世界和风格
     const savedMapStyle = loadMapSettings()?.mapStyle ?? 'default';
-    let tileLayer: L.TileLayer;
-    if (savedMapStyle === 'sketch') {
-      tileLayer = createSketchTileLayer(savedWorld, 'flat');
-    } else if (savedMapStyle === 'watercolor') {
-      tileLayer = createWatercolorTileLayer(savedWorld, 'flat');
-    } else {
-      tileLayer = createDynmapTileLayer(savedWorld, 'flat');
-    }
+const tileLayerOptions = {
+  minZoom: -3,
+  maxZoom: projection.maxZoom, // 5
+  minNativeZoom: -2,           // 允许请求 zzzz/zzzzz（zoom<0 时仍命中真实瓦片）
+  maxNativeZoom: 3             // 保持你现有 Dynmap 行为
+};
+
+let tileLayer: L.TileLayer;
+if (savedMapStyle === 'sketch') {
+  tileLayer = createSketchTileLayer(savedWorld, 'flat', tileLayerOptions);
+} else if (savedMapStyle === 'watercolor') {
+  tileLayer = createWatercolorTileLayer(savedWorld, 'flat', tileLayerOptions);
+} else {
+  tileLayer = createDynmapTileLayer(savedWorld, 'flat', tileLayerOptions);
+}
+
+
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -426,23 +514,41 @@ function MapContainer() {
     coordControl.addTo(map);
 
     // 监听鼠标移动，更新坐标显示
-    map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      // 使用投影的逆转换获取世界坐标
-      const proj = projectionRef.current;
-      if (!proj) return;
+const coordDiv = coordControl.getContainer?.() ?? document.querySelector('.coord-display');
+let rafId: number | null = null;
+let latestCoord: { x: number; z: number } | null = null;
 
-      const worldCoord = proj.latLngToLocation(e.latlng, 64);
-      const coordDiv = document.querySelector('.coord-display');
-      if (coordDiv) {
-        coordDiv.innerHTML = `X: ${Math.round(worldCoord.x)}, Z: ${Math.round(worldCoord.z)}`;
-      }
-    });
+const flushCoord = () => {
+  if (!coordDiv || !latestCoord) return;
+  coordDiv.innerHTML = `X: ${formatGridNumber(latestCoord.x)}, Z: ${formatGridNumber(latestCoord.z)}`;
+  rafId = null;
+};
+
+const handleMouseMove = (e: L.LeafletMouseEvent) => {
+  const proj = projectionRef.current;
+  if (!proj) return;
+
+  const worldCoord = proj.latLngToLocation(e.latlng, 64);
+
+  // 与测绘控件保持一致：坐标显示也遵循“方块中心(.5)/方块边缘(.0)/自动(.5步进)”
+  const snapped = snapWorldPointByMode({ x: worldCoord.x, z: worldCoord.z });
+  latestCoord = snapped;
+
+  if (rafId === null) {
+    rafId = window.requestAnimationFrame(flushCoord);
+  }
+};
+
+map.on('mousemove', handleMouseMove);
+
 
     leafletMapRef.current = map;
     setMapReady(true);
 
     // 清理函数
     return () => {
+      map.off('mousemove', handleMouseMove);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
@@ -455,13 +561,25 @@ function MapContainer() {
       {/* 地图容器 */}
       <div ref={mapRef} className="w-full h-full" />
 
+      {/* 规则驱动图层（总开关控制，worldId 切换自动重载） */}
+      {mapReady && leafletMapRef.current && projectionRef.current && (
+        <RuleDrivenLayer
+          mapReady={mapReady}
+          map={leafletMapRef.current}
+          projection={projectionRef.current}
+          worldId={currentWorld}
+          visible={showRuleLayers}
+        />
+      )}
+
+
       {/* 铁路图层 - 有路径规划结果时隐藏 */}
       {mapReady && leafletMapRef.current && projectionRef.current && (
         <RailwayLayer
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showRailway && !routePath}
+          visible={showRailway && !showRouteOverlay}
           mapStyle={mapStyle}
           onStationClick={handleStationClick}
         />
@@ -473,7 +591,7 @@ function MapContainer() {
           map={leafletMapRef.current}
           projection={projectionRef.current}
           worldId={currentWorld}
-          visible={showLandmark && !routePath}
+          visible={showLandmark && !showRouteOverlay}
           onLandmarkClick={handleLandmarkClick}
         />
       )}
@@ -492,14 +610,14 @@ function MapContainer() {
       {/* 左侧面板区域 */}
       <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-auto z-[1000] flex flex-col gap-2 sm:max-w-[300px]">
         {/* 标题和世界切换 */}
-        <div className="bg-white/90 px-3 py-2 sm:px-4 rounded-lg shadow-lg">
-          <h1 className="text-base sm:text-lg font-bold text-gray-800">RIA 铁路在线地图</h1>
+        <AppCard className="bg-white/90 px-3 py-2 sm:px-4">
+          <h1 className="text-base sm:text-lg font-bold text-gray-800">RIA 在线地图</h1>
           <WorldSwitcher
             worlds={WORLDS}
             currentWorld={currentWorld}
             onWorldChange={handleWorldChange}
           />
-        </div>
+        </AppCard>
 
         {/* 搜索栏 */}
         <SearchBar
@@ -550,6 +668,7 @@ function MapContainer() {
               }}
             />
           )}
+
 
           {/* 线路详情卡片 */}
           {highlightedLine && (
@@ -620,17 +739,18 @@ function MapContainer() {
         </div>
 
         {/* 清除路径按钮 */}
-        {routePath && routePath.length > 0 && (
-          <button
-            onClick={() => setRoutePath(null)}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            <span>清除路径</span>
-          </button>
-        )}
+{hasRoute && (
+  <AppButton
+    onClick={() => setRouteHighlight(null)}
+    className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-2 w-fit text-sm"
+  >
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+    <span>清除路径</span>
+  </AppButton>
+)}
+
       </div>
 
       {/* 桌面端：可拖拽浮动面板 */}
@@ -785,24 +905,45 @@ function MapContainer() {
           showRailway={showRailway}
           showLandmark={showLandmark}
           showPlayers={showPlayers}
+          showRuleLayers={showRuleLayers}
           dimBackground={dimBackground}
           mapStyle={mapStyle}
           onToggleRailway={setShowRailway}
           onToggleLandmark={setShowLandmark}
           onTogglePlayers={setShowPlayers}
+          onToggleRuleLayers={(show) => setShowRuleLayers(show)}
           onToggleDimBackground={setDimBackground}
           onToggleMapStyle={setMapStyle}
-        />
+        >
+          <MeasurementToolsModule
+            mapReady={mapReady}
+            leafletMapRef={leafletMapRef}
+            projectionRef={projectionRef}
+            closeSignal={measureToolsCloseSignal}
+            onBecameActive={() => setMeasuringCloseSignal(v => v + 1)}
+            launcherSlot={(launcher) => <div className="hidden sm:block">{launcher}</div>}
+          />
+          <MeasuringModule
+            mapReady={mapReady}
+            leafletMapRef={leafletMapRef}
+            projectionRef={projectionRef}
+            currentWorldId={currentWorld}
+            closeSignal={measuringCloseSignal}
+            onBecameActive={() => setMeasureToolsCloseSignal(v => v + 1)}
+            launcherSlot={(launcher) => <div className="hidden sm:block">{launcher}</div>}
+          />
+        </LayerControl>
       </div>
 
       {/* 路径高亮图层 */}
-      {mapReady && leafletMapRef.current && projectionRef.current && routePath && routePath.length > 0 && (
-        <RouteHighlightLayer
-          map={leafletMapRef.current}
-          projection={projectionRef.current}
-          path={routePath}
-        />
-      )}
+{mapReady && leafletMapRef.current && projectionRef.current && showRouteOverlay && routeHighlight && (
+  <RouteHighlightLayer
+    map={leafletMapRef.current}
+    projection={projectionRef.current}
+    route={routeHighlight}
+  />
+)}
+
 
       {/* 线路高亮图层 */}
       {mapReady && leafletMapRef.current && projectionRef.current && highlightedLine && showRailway && (

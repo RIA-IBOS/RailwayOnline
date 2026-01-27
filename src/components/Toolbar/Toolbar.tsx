@@ -4,8 +4,11 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil, Settings } from 'lucide-react';
+import { Navigation, List, HelpCircle, Train, Home, Moon, X, User, Users, Map, Palette, Pencil, Settings, Layers } from 'lucide-react';
 import type { MapStyle } from '@/lib/cookies';
+import ToolIconButton from '@/components/Toolbar/ToolIconButton';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface ToolbarProps {
   onNavigationClick: () => void;
@@ -23,9 +26,9 @@ export function Toolbar({
   onSettingsClick,
 }: ToolbarProps) {
   return (
-    <div className="bg-white/90 rounded-lg shadow-lg p-2 flex items-center gap-1">
+    <AppCard className="bg-white/90 p-2 flex items-center gap-1">
       {/* 路径规划 */}
-      <button
+      <AppButton
         onClick={onNavigationClick}
         className="p-2 rounded-lg hover:bg-blue-50 text-gray-600 hover:text-blue-600 transition-colors group relative"
         title="路径规划"
@@ -34,12 +37,12 @@ export function Toolbar({
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           路径规划
         </span>
-      </button>
+      </AppButton>
 
       <div className="w-px h-6 bg-gray-200" />
 
       {/* 全部线路 */}
-      <button
+      <AppButton
         onClick={onLinesClick}
         className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors group relative"
         title="线路列表"
@@ -48,10 +51,10 @@ export function Toolbar({
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           线路列表
         </span>
-      </button>
+      </AppButton>
 
       {/* 在线玩家 */}
-      <button
+      <AppButton
         onClick={onPlayersClick}
         className="p-2 rounded-lg hover:bg-cyan-50 text-gray-600 hover:text-cyan-600 transition-colors group relative"
         title="在线玩家"
@@ -60,10 +63,10 @@ export function Toolbar({
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           在线玩家
         </span>
-      </button>
+      </AppButton>
 
       {/* 帮助 */}
-      <button
+      <AppButton
         onClick={onHelpClick}
         className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors group relative"
         title="帮助"
@@ -72,10 +75,10 @@ export function Toolbar({
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           帮助
         </span>
-      </button>
+      </AppButton>
 
       {/* 设置 */}
-      <button
+      <AppButton
         onClick={onSettingsClick}
         className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-800 transition-colors group relative"
         title="设置"
@@ -84,8 +87,8 @@ export function Toolbar({
         <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           设置
         </span>
-      </button>
-    </div>
+      </AppButton>
+    </AppCard>
   );
 }
 
@@ -98,9 +101,9 @@ const MAP_STYLE_OPTIONS: Array<{
   icon: React.ReactNode;
   description: string;
 }> = [
-  { value: 'default', label: '原版', icon: <Map className="w-4 h-4" />, description: '卫星原始渲染' },
-  { value: 'watercolor', label: '淡彩', icon: <Palette className="w-4 h-4" />, description: '柔和水彩风格' },
-  { value: 'sketch', label: '素描', icon: <Pencil className="w-4 h-4" />, description: '手绘地图风格' },
+  { value: 'default', label: '原版', icon: <Map className="w-5 h-5" />, description: '卫星原始渲染' },
+  { value: 'watercolor', label: '淡彩', icon: <Palette className="w-5 h-5" />, description: '柔和水彩风格' },
+  { value: 'sketch', label: '素描', icon: <Pencil className="w-5 h-5" />, description: '手绘地图风格' },
 ];
 
 /**
@@ -136,9 +139,9 @@ function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps)
 
   return (
     <div ref={dropdownRef} className="relative">
-      <button
+      <AppButton
         onClick={() => setIsOpen(!isOpen)}
-        className={`p-2 rounded-lg transition-colors group relative ${
+        className={`h-9 w-9 p-1.5 transition-colors group relative ${
           mapStyle !== 'default'
             ? 'bg-amber-100 text-amber-600'
             : 'hover:bg-gray-100 text-gray-400'
@@ -146,21 +149,21 @@ function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps)
         title="地图风格"
       >
         {currentStyle.icon}
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none max-md:hidden">
+        <span className="absolute right-full mr-2 top-1/2 -translate-y-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none max-md:hidden">
           {currentStyle.label}
         </span>
-      </button>
+      </AppButton>
 
       {/* 下拉菜单 - 桌面端向下弹出，移动端向上弹出 */}
-      <div
-        className={`absolute right-0 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 transition-all duration-150 md:mt-1 md:origin-top-right max-md:bottom-full max-md:mb-1 max-md:origin-bottom-right ${
+      <AppCard
+        className={`absolute right-0 w-36 border border-gray-200 py-1 z-50 transition-all duration-150 md:mt-1 md:origin-top-right max-md:bottom-full max-md:mb-1 max-md:origin-bottom-right ${
           isOpen
             ? 'opacity-100 scale-100'
             : 'opacity-0 scale-95 pointer-events-none'
         }`}
       >
         {MAP_STYLE_OPTIONS.map((option) => (
-          <button
+          <AppButton
             key={option.value}
             onClick={() => {
               onToggleMapStyle(option.value);
@@ -172,9 +175,9 @@ function MapStyleSelector({ mapStyle, onToggleMapStyle }: MapStyleSelectorProps)
           >
             {option.icon}
             <span className={mapStyle === option.value ? 'font-medium' : ''}>{option.label}</span>
-          </button>
+          </AppButton>
         ))}
-      </div>
+      </AppCard>
     </div>
   );
 }
@@ -188,17 +191,18 @@ interface AboutCardProps {
 
 export function AboutCard({ onClose }: AboutCardProps) {
   return (
-    <div className="bg-white/90 rounded-lg shadow-lg p-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-800">关于</span>
-        <button
+    <AppCard className="bg-white/90">
+      <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
+        <h3 className="font-bold text-gray-800">关于</h3>
+        <AppButton
           onClick={onClose}
-          className="p-1 hover:bg-gray-200 rounded text-gray-500"
+          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+          title="关闭"
         >
           <X className="w-4 h-4" />
-        </button>
+        </AppButton>
       </div>
-      <div className="text-xs text-gray-600 space-y-2">
+      <div className="p-4 text-xs text-gray-600 space-y-2">
         <div className="bg-yellow-50 border border-yellow-200 rounded px-2 py-1 text-yellow-700">
           该平台正在测试中
         </div>
@@ -207,8 +211,12 @@ export function AboutCard({ onClose }: AboutCardProps) {
           <span>Venti_Lynn</span>
         </div>
         <div>
+          <span className="font-medium text-gray-800">测绘/测量控件：</span>
+          <span>Ozstk639</span>
+        </div>
+        <div>
           <span className="font-medium text-gray-800">数据来源：</span>
-          <div className="mt-1 space-y-0.5 text-gray-500">
+          <div className="mt-1 space-y-0.5 text-gray-600">
             <div>
               <a href="https://satellite.ria.red/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                 莉亚红一号卫星
@@ -225,7 +233,7 @@ export function AboutCard({ onClose }: AboutCardProps) {
           </div>
         </div>
       </div>
-    </div>
+    </AppCard>
   );
 }
 
@@ -236,98 +244,101 @@ interface LayerControlProps {
   showRailway: boolean;
   showLandmark: boolean;
   showPlayers: boolean;
+  showRuleLayers?: boolean;
   dimBackground: boolean;
   mapStyle: MapStyle;
   onToggleRailway: (show: boolean) => void;
   onToggleLandmark: (show: boolean) => void;
   onTogglePlayers: (show: boolean) => void;
+  onToggleRuleLayers?: (show: boolean) => void;
   onToggleDimBackground: (dim: boolean) => void;
   onToggleMapStyle: (style: MapStyle) => void;
+  children?: React.ReactNode;
 }
 
 export function LayerControl({
   showRailway,
   showLandmark,
   showPlayers,
+  showRuleLayers,
   dimBackground,
   mapStyle,
   onToggleRailway,
   onToggleLandmark,
   onTogglePlayers,
+  onToggleRuleLayers,
   onToggleDimBackground,
   onToggleMapStyle,
+  children,
 }: LayerControlProps) {
+  const hasExtra = !!children;
+
   return (
-    <div className="bg-white/90 rounded-lg shadow-lg p-2 flex items-center gap-1">
-      {/* 铁路图层 */}
-      <button
-        onClick={() => onToggleRailway(!showRailway)}
-        className={`p-2 rounded-lg transition-colors group relative ${
-          showRailway
-            ? 'bg-blue-100 text-blue-600'
-            : 'hover:bg-gray-100 text-gray-400'
-        }`}
-        title="铁路图层"
-      >
-        <Train className="w-5 h-5" />
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          铁路
-        </span>
-      </button>
+    <AppCard className="bg-white/90 p-3 flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1">
+        {/* 铁路图层 */}
+        <ToolIconButton
+          label="铁路"
+          icon={<Train className="w-5 h-5" />}
+          active={showRailway}
+          tone="blue"
+          onClick={() => onToggleRailway(!showRailway)}
+        />
 
-      {/* 地标图层 */}
-      <button
-        onClick={() => onToggleLandmark(!showLandmark)}
-        className={`p-2 rounded-lg transition-colors group relative ${
-          showLandmark
-            ? 'bg-green-100 text-green-600'
-            : 'hover:bg-gray-100 text-gray-400'
-        }`}
-        title="地标图层"
-      >
-        <Home className="w-5 h-5" />
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          地标
-        </span>
-      </button>
+        {/* 地标图层 */}
+        <ToolIconButton
+          label="地标"
+          icon={<Home className="w-5 h-5" />}
+          active={showLandmark}
+          tone="green"
+          onClick={() => onToggleLandmark(!showLandmark)}
+        />
 
-      {/* 玩家图层 */}
-      <button
-        onClick={() => onTogglePlayers(!showPlayers)}
-        className={`p-2 rounded-lg transition-colors group relative ${
-          showPlayers
-            ? 'bg-cyan-100 text-cyan-600'
-            : 'hover:bg-gray-100 text-gray-400'
-        }`}
-        title="玩家图层"
-      >
-        <User className="w-5 h-5" />
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          玩家
-        </span>
-      </button>
+        {/* 玩家图层 */}
+        <ToolIconButton
+          label="玩家"
+          icon={<User className="w-5 h-5" />}
+          active={showPlayers}
+          tone="cyan"
+          onClick={() => onTogglePlayers(!showPlayers)}
+        />
 
-      <div className="w-px h-6 bg-gray-200" />
+        {/* 规则图层 */}
+        {typeof showRuleLayers === 'boolean' && onToggleRuleLayers && (
+          <div className="hidden sm:block">
+            <ToolIconButton
+              label="规则"
+              icon={<Layers className="w-5 h-5" />}
+              active={showRuleLayers}
+              tone="blue"
+              onClick={() => onToggleRuleLayers(!showRuleLayers)}
+            />
+          </div>
+        )}
+      </div>
 
-      {/* 淡化背景 */}
-      <button
-        onClick={() => onToggleDimBackground(!dimBackground)}
-        className={`p-2 rounded-lg transition-colors group relative ${
-          dimBackground
-            ? 'bg-purple-100 text-purple-600'
-            : 'hover:bg-gray-100 text-gray-400'
-        }`}
-        title="淡化背景"
-      >
-        <Moon className="w-5 h-5" />
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs bg-gray-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          淡化背景
-        </span>
-      </button>
+      <div className="h-px bg-gray-200" />
 
-      {/* 地图风格下拉选择器 */}
-      <MapStyleSelector mapStyle={mapStyle} onToggleMapStyle={onToggleMapStyle} />
-    </div>
+      <div className="flex flex-wrap items-center gap-1">
+        {hasExtra && (
+          <div className="flex items-center gap-1">
+            {children}
+          </div>
+        )}
+
+        {/* 淡化背景 */}
+        <ToolIconButton
+          label="淡化背景"
+          icon={<Moon className="w-5 h-5" />}
+          active={dimBackground}
+          tone="purple"
+          onClick={() => onToggleDimBackground(!dimBackground)}
+        />
+
+        {/* 地图风格下拉选择器 */}
+        <MapStyleSelector mapStyle={mapStyle} onToggleMapStyle={onToggleMapStyle} />
+      </div>
+    </AppCard>
   );
 }
 

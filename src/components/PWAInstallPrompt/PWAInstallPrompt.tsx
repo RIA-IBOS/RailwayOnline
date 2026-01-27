@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, X } from 'lucide-react';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -66,7 +68,7 @@ export function PWAInstallPrompt() {
 
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-[2000]">
-      <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4">
+      <AppCard className="border border-gray-200 p-4">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
             <Download className="w-5 h-5 text-blue-600" />
@@ -77,28 +79,28 @@ export function PWAInstallPrompt() {
               将 RIA 铁路在线地图添加到主屏幕，获得更好的体验
             </p>
           </div>
-          <button
+          <AppButton
             onClick={handleDismiss}
             className="flex-shrink-0 text-gray-400 hover:text-gray-500"
           >
             <X className="w-5 h-5" />
-          </button>
+          </AppButton>
         </div>
         <div className="mt-3 flex gap-2">
-          <button
+          <AppButton
             onClick={handleDismiss}
             className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
           >
             以后再说
-          </button>
-          <button
+          </AppButton>
+          <AppButton
             onClick={handleInstall}
             className="flex-1 px-3 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           >
             安装
-          </button>
+          </AppButton>
         </div>
-      </div>
+      </AppCard>
     </div>
   );
 }

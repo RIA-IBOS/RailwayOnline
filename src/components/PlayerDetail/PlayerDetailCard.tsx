@@ -6,6 +6,8 @@
 import { X, User, Heart, Shield, Train, Home } from 'lucide-react';
 import type { Player, ParsedStation } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface PlayerDetailCardProps {
   player: Player;
@@ -41,7 +43,7 @@ export function PlayerDetailCard({
   const armorPercent = (player.armor / 20) * 100;
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-full sm:w-72 max-h-[60vh] flex flex-col">
+    <AppCard className="w-full sm:w-72 max-h-[60vh] flex flex-col">
       {/* 头部 */}
       <div className="px-4 py-3 rounded-t-lg flex items-center justify-between bg-cyan-500">
         <div className="text-white">
@@ -53,12 +55,12 @@ export function PlayerDetailCard({
             X: {Math.round(player.x)}, Y: {Math.round(player.y)}, Z: {Math.round(player.z)}
           </p>
         </div>
-        <button
+        <AppButton
           onClick={onClose}
           className="text-white/80 hover:text-white p-1"
         >
           <X className="w-5 h-5" />
-        </button>
+        </AppButton>
       </div>
 
       {/* 详情内容 */}
@@ -109,7 +111,7 @@ export function PlayerDetailCard({
             </div>
             <div className="space-y-1">
               {nearbyStations.map((station, idx) => (
-                <button
+                <AppButton
                   key={idx}
                   className="w-full flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded text-left"
                   onClick={() => onStationClick?.(station)}
@@ -118,7 +120,7 @@ export function PlayerDetailCard({
                   <span className="text-xs text-gray-400 ml-2">
                     {Math.round(getDistance(playerCoord, station.coord))}m
                   </span>
-                </button>
+                </AppButton>
               ))}
             </div>
           </div>
@@ -133,7 +135,7 @@ export function PlayerDetailCard({
             </div>
             <div className="space-y-1">
               {nearbyLandmarks.map((landmark, idx) => (
-                <button
+                <AppButton
                   key={idx}
                   className="w-full flex items-center justify-between py-1.5 px-2 hover:bg-gray-50 rounded text-left"
                   onClick={() => onLandmarkClick?.(landmark)}
@@ -145,7 +147,7 @@ export function PlayerDetailCard({
                   <span className="text-xs text-gray-400 ml-2">
                     {landmark.coord ? Math.round(getDistance(playerCoord, landmark.coord)) : '?'}m
                   </span>
-                </button>
+                </AppButton>
               ))}
             </div>
           </div>
@@ -158,7 +160,7 @@ export function PlayerDetailCard({
           </div>
         )}
       </div>
-    </div>
+    </AppCard>
   );
 }
 

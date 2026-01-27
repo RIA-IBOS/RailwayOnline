@@ -9,6 +9,7 @@ import type { ParsedLine, BureausConfig } from '@/types';
 import { getBureauName } from '@/lib/railwayParser';
 import { useDataStore } from '@/store/dataStore';
 import { RMPMapView } from './RMPMapView';
+import AppButton from '@/components/ui/AppButton';
 
 // RMP 原始数据类型
 interface RMPData {
@@ -84,18 +85,18 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
       {/* 头部 */}
       <div className="sticky top-0 bg-white shadow-sm z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-          <button
+          <AppButton
             onClick={onBack}
             className="p-2 hover:bg-gray-100 rounded-lg"
           >
             <ChevronLeft className="w-5 h-5" />
-          </button>
+          </AppButton>
           <h1 className="text-lg font-bold">线路列表</h1>
 
           {/* 世界切换 */}
           <div className="flex gap-1 ml-auto">
             {WORLDS.map(world => (
-              <button
+              <AppButton
                 key={world.id}
                 onClick={() => setCurrentWorld(world.id)}
                 className={`px-3 py-1 text-sm rounded ${
@@ -105,7 +106,7 @@ export function LinesPage({ onBack, onLineSelect }: LinesPageProps) {
                 }`}
               >
                 {world.name}
-              </button>
+              </AppButton>
             ))}
           </div>
         </div>
@@ -185,7 +186,7 @@ function LineCard({ line, onSelect }: { line: ParsedLine; onSelect?: (line: Pars
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      <button
+      <AppButton
         className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50"
         onClick={() => setExpanded(!expanded)}
       >
@@ -209,19 +210,19 @@ function LineCard({ line, onSelect }: { line: ParsedLine; onSelect?: (line: Pars
         <ChevronDown
           className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
         />
-      </button>
+      </AppButton>
 
       {/* 展开内容 */}
       {expanded && (
         <div className="px-4 pb-3 border-t">
           {/* 操作按钮 */}
           {onSelect && (
-            <button
+            <AppButton
               onClick={() => onSelect(line)}
               className="mt-2 mb-3 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
             >
               在地图上查看
-            </button>
+            </AppButton>
           )}
 
           {/* 站点列表 */}

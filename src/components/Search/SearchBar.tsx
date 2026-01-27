@@ -7,6 +7,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Search as SearchIcon, Train, Home, Route } from 'lucide-react';
 import type { ParsedStation, ParsedLine } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface SearchResult {
   type: 'station' | 'landmark' | 'line';
@@ -133,7 +135,7 @@ export function SearchBar({ stations, landmarks, lines, onSelect, onLineSelect }
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center bg-white rounded-lg shadow-lg">
+      <AppCard className="flex items-center">
         <span className="pl-3 text-gray-400">
           <SearchIcon className="w-5 h-5" />
         </span>
@@ -147,15 +149,15 @@ export function SearchBar({ stations, landmarks, lines, onSelect, onLineSelect }
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="搜索线路、站点或地标..."
-          className="flex-1 w-full sm:w-64 px-3 py-2 text-sm outline-none rounded-r-lg"
+          className="flex-1 w-full sm:w-64 px-3 py-2 text-sm outline-none rounded-r-2xl"
         />
-      </div>
+      </AppCard>
 
       {/* 搜索结果下拉框 */}
       {isOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg max-h-80 overflow-y-auto z-50">
+        <AppCard className="absolute top-full left-0 right-0 mt-1 max-h-80 overflow-y-auto z-50">
           {results.map((result, index) => (
-            <button
+            <AppButton
               key={`${result.type}-${result.name}-${index}`}
               className="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 border-b border-gray-100 last:border-b-0"
               onClick={() => handleSelect(result)}
@@ -189,16 +191,16 @@ export function SearchBar({ stations, landmarks, lines, onSelect, onLineSelect }
               <div className="text-xs text-gray-400">
                 {Math.round(result.coord.x)}, {Math.round(result.coord.z)}
               </div>
-            </button>
+            </AppButton>
           ))}
-        </div>
+        </AppCard>
       )}
 
       {/* 无结果提示 */}
       {isOpen && query.length > 0 && results.length === 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg p-3 text-sm text-gray-500 z-50">
+        <AppCard className="absolute top-full left-0 right-0 mt-1 p-3 text-sm text-gray-500 z-50">
           未找到匹配结果
-        </div>
+        </AppCard>
       )}
     </div>
   );

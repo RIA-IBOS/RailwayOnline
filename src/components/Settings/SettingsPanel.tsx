@@ -4,9 +4,17 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, Trash2, Database, Smartphone, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { X, RefreshCw, Trash2, Database, Smartphone, CheckCircle, AlertCircle, Loader2, Download } from 'lucide-react';
+
+// PWA 安装事件类型
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 import { useDataStore } from '@/store/dataStore';
 import { useLoadingStore } from '@/store/loadingStore';
+import AppButton from '@/components/ui/AppButton';
+import AppCard from '@/components/ui/AppCard';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -25,6 +33,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     canInstall: false,
     swActive: false,
   });
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   // 检查 PWA 状态
   useEffect(() => {
@@ -49,8 +59,34 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       isInstalled,
     }));
 
+    // 监听 beforeinstallprompt 事件
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      setPwaStatus(prev => ({
+        ...prev,
+        canInstall: true,
+      }));
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // 监听安装完成
+    window.addEventListener('appinstalled', () => {
+      setPwaStatus(prev => ({
+        ...prev,
+        isInstalled: true,
+        canInstall: false,
+      }));
+      setDeferredPrompt(null);
+    });
+
     // 更新缓存信息
     updateCacheInfo();
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, [updateCacheInfo]);
 
   // 格式化文件大小
@@ -121,17 +157,38 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   };
 
+  // 安装 PWA
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) return;
+
+    setIsInstalling(true);
+    try {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setPwaStatus(prev => ({
+          ...prev,
+          isInstalled: true,
+          canInstall: false,
+        }));
+      }
+    } finally {
+      setIsInstalling(false);
+      setDeferredPrompt(null);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-lg w-80 max-h-[80vh] overflow-hidden flex flex-col">
+    <AppCard className="w-80 max-h-[80vh] overflow-hidden flex flex-col">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
         <h2 className="font-bold text-gray-800">设置</h2>
-        <button
+        <AppButton
           onClick={onClose}
           className="p-1 hover:bg-gray-200 rounded"
         >
           <X className="w-5 h-5 text-gray-500" />
-        </button>
+        </AppButton>
       </div>
 
       {/* 内容 */}
@@ -179,7 +236,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           {/* 操作按钮 */}
           <div className="flex gap-2">
-            <button
+            <AppButton
               onClick={handleRefresh}
               disabled={isRefreshing}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white text-sm rounded-lg transition-colors"
@@ -190,16 +247,16 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 <RefreshCw className="w-4 h-4" />
               )}
               <span>刷新数据</span>
-            </button>
+            </AppButton>
 
-            <button
+            <AppButton
               onClick={handleClearCache}
               disabled={isRefreshing}
               className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 text-gray-700 text-sm rounded-lg transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               <span>清除</span>
-            </button>
+            </AppButton>
           </div>
         </div>
 
@@ -239,6 +296,22 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               </span>
             </div>
           </div>
+
+          {/* 安装按钮 - 仅在可安装且未安装时显示 */}
+          {pwaStatus.canInstall && !pwaStatus.isInstalled && (
+            <AppButton
+              onClick={handleInstallPWA}
+              disabled={isInstalling}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white text-sm rounded-lg transition-colors"
+            >
+              {isInstalling ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>安装到桌面</span>
+            </AppButton>
+          )}
         </div>
 
         {/* 关于 */}
@@ -247,7 +320,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           <p>也可以手动刷新获取最新数据</p>
         </div>
       </div>
-    </div>
+    </AppCard>
   );
 }
 
