@@ -1,18 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 
 import {
   FORMAT_REGISTRY,
+  WORKFLOW_FEATURE_CATALOG,
   getSubTypeOptions,
   layerToJsonText,
-  parseCoordListFlexible,
   validateImportItemDetailed,
   validateRequiredDetailed,
   formatMissingEntries,
+  TAG_KEY_OTHER,
+  TAG_KEY_OPTIONS,
+  EXT_VALUE_TYPE_TEXT,
+  EXT_VALUE_TYPE_NULL,
+  EXT_VALUE_TYPE_OPTIONS,
   type FeatureKey,
-  type ImportFormat,
   type DrawMode,
 } from '@/components/Mapping/featureFormats';
 
@@ -36,6 +40,8 @@ import GridSnapModeSwitch, {
 
 import ManualPointInput from '@/components/Mapping/ManualPointInput';
 
+import CurveInputT, { type CurveInputTHandle } from '@/components/Mapping/CurveInputT';
+
 import MergePointPlatformStation, {
   type MergePointPlatformStationDraft,
 } from '@/components/Mapping/Special/MergePointPlatformStation';
@@ -57,6 +63,17 @@ import WorkflowHost, {
 } from '@/components/Mapping/Workflow/WorkflowHost';
 import RailwayWorkflow from '@/components/Mapping/Workflow/RailwayWorkflow';
 import StationWorkflow from '@/components/Mapping/Workflow/StationWorkflow';
+import NaturalLandWorkflow from '@/components/Mapping/Workflow/NaturalLandWorkflow';
+import NaturalLandSurfaceWorkflow from '@/components/Mapping/Workflow/NaturalLandSurfaceWorkflow';
+import NaturalWaterbodyWorkflow from '@/components/Mapping/Workflow/NaturalWaterbodyWorkflow';
+import NaturalWaterwayWorkflow from '@/components/Mapping/Workflow/NaturalWaterwayWorkflow';
+import NaturalBoundaryWorkflow from '@/components/Mapping/Workflow/NaturalBoundaryWorkflow';
+import SettlementBoundaryDeterminedWorkflow from '@/components/Mapping/Workflow/SettlementBoundaryDeterminedWorkflow';
+import SettlementBoundaryPlannedWorkflow from '@/components/Mapping/Workflow/SettlementBoundaryPlannedWorkflow';
+import SettlementBoundaryLineWorkflow from '@/components/Mapping/Workflow/SettlementBoundaryLineWorkflow';
+import SpecialCulturalPointWorkflow from '@/components/Mapping/Workflow/SpecialCulturalPointWorkflow';
+import BuildingWorkflow from '@/components/Mapping/Workflow/BuildingWorkflow';
+import FloorUnitWorkflow from '@/components/Mapping/Workflow/FloorUnitWorkflow';
 import AppButton from '@/components/ui/AppButton';
 import AppCard from '@/components/ui/AppCard';
 
@@ -86,7 +103,15 @@ type MeasuringModuleProps = {
   launcherSlot?: (launcher: React.ReactNode) => React.ReactNode;
 };
 
-export default function MeasuringModule(props: MeasuringModuleProps) {
+export type MeasuringModuleHandle = {
+  /**
+   * 在切换世界等场景下使用：若用户取消确认，则返回 false 并阻止上层继续执行。
+   * 内部会负责：先关闭“临时挂载”，再清除测绘图层并退出测绘。
+   */
+  requestCloseAndClear: (actionLabel?: string) => boolean;
+};
+
+const MeasuringModule = forwardRef<MeasuringModuleHandle, MeasuringModuleProps>((props, ref) => {
   const { mapReady, leafletMapRef, projectionRef, currentWorldId, closeSignal, onBecameActive, launcherSlot } = props;
 
 
@@ -159,12 +184,26 @@ const [featureInfo, setFeatureInfo] = useState<any>({});
 // JSON 表单：动态 fields/groups（由 FORMAT_REGISTRY[subType] 驱动）
 const [groupInfo, setGroupInfo] = useState<Record<string, any[]>>({});
 
+// extensions Step A：按组分区编辑时用于新增 extGroup
+const [newExtGroupInput, setNewExtGroupInput] = useState('');
+
 // 编辑者ID：用于自动写入 CreateBy / ModifityBy（不直接作为附加字段输出）
 const [editorIdInput, setEditorIdInput] = useState('');
 
 // ======== 切换确认：附加信息不为空时提示可能丢失 ========
 const [switchWarnOpen, setSwitchWarnOpen] = useState(false);
 const pendingSwitchActionRef = useRef<null | (() => void)>(null);
+
+
+// ======== 测绘进入/退出：要素类型选择状态复位（解决“附加信息面板残留”） ========
+const resetFeatureSelectionState = () => {
+  // 要素类型回到默认，附加信息回到空（避免下次进入测绘仍残留上次编辑的字段面板）
+  setSubType('默认');
+  const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
+  setFeatureInfo(hydrated.values ?? {});
+  setGroupInfo(hydrated.groups ?? {});
+  setNewExtGroupInput('');
+};
 
 const isExtraInfoNonEmpty = () => {
   if (subType === '默认') return false;
@@ -225,6 +264,9 @@ const endMeasuringNow = () => {
   // 1) 关闭 UI
   setMeasuringActive(false);
 
+  // 复位要素类型/附加信息选择状态（避免下次进入测绘残留）
+  resetFeatureSelectionState();
+
   // 2) 清空测绘图层（fixedRoot + 状态）
   clearAllLayers();
 
@@ -259,10 +301,8 @@ const cancelEndMeasuring = () => {
 
 // ---- 导入矢量数据相关状态 ----
 const [importPanelOpen, setImportPanelOpen] = useState(false);
-
-const [importFormat, setImportFormat] = useState<ImportFormat>('点');
-
 const [importText, setImportText] = useState('');
+
 
 const randomColor = () => {
   const r = Math.floor(Math.random()*255);
@@ -283,6 +323,18 @@ const workflowPreviewMapRef = useRef<Map<string, L.Layer>>(new Map());
 
 // ======== ControlPointsT：控制点修改/添加（替代旧 ControlPointTools） ========
 const controlPointsTRef = useRef<ControlPointsTHandle | null>(null);
+
+// ======== CurveInputT：曲线输入（独立临时容器） ========
+const curveInputTRef = useRef<CurveInputTHandle | null>(null);
+
+// CurveInputT 面板开启期间：完全冻结主绘制/编辑区交互（独立于 ControlPointsT 的抑制状态）
+const [curveInputFrozen, setCurveInputFrozen] = useState(false);
+const curveInputFrozenRef = useRef(false);
+// 重要：冻结需要“立即生效”，避免刚打开面板就点击地图时主绘制抢先加点。
+const setCurveInputFrozenImmediate = (v: boolean) => {
+  curveInputFrozenRef.current = v;
+  setCurveInputFrozen(v);
+};
 
 // ControlPointsT 开启修改/添加时：禁止绘制区 click 加点（避免与“控制点移动/插入”冲突）
 const [drawClickSuppressed, setDrawClickSuppressed] = useState(false);
@@ -329,7 +381,7 @@ useEffect(() => {
 // ======== JSON 导出窗口（替代 alert/print） ========
 const [jsonPanelOpen, setJsonPanelOpen] = useState(false);
 const [jsonPanelText, setJsonPanelText] = useState('');
-const [jsonExportSubType, setJsonExportSubType] = useState<FeatureKey | '__ALL__'>('__ALL__');
+const [jsonExportSubType, setJsonExportSubType] = useState<string>('__ALL__');
 
 // 临时挂载到 RuleDrivenLayer 的本地存储 key（与 RuleDrivenLayer 保持一致）
 const TEMP_RULE_SOURCES_KEY = 'ria_temp_rule_sources_v1';
@@ -466,6 +518,32 @@ const confirmExitAndClear = (actionLabel: string) => {
   const ok = window.confirm(`${actionLabel}将清除所有测绘图层，是否确认？`);
   if (!ok) return false;
 
+  // 退出测绘时：若仍处于“临时挂载”模式，必须先关闭挂载（并触发规则图层重载）
+  // 目标：避免退出测绘后仍残留挂载源，导致后续世界/数据处理混乱。
+  try {
+    const raw = localStorage.getItem(TEMP_RULE_SOURCES_KEY);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj === 'object') {
+        const prev = Array.isArray((obj as any)?.[currentWorldId]) ? ((obj as any)[currentWorldId] as any[]) : [];
+        const prefix = `${currentWorldId}::layer-`;
+        const next = prev.filter((x) => {
+          const uid = x && typeof x === 'object' ? String((x as any).uid ?? '') : '';
+          return !uid.startsWith(prefix);
+        });
+        (obj as any)[currentWorldId] = next;
+        localStorage.setItem(TEMP_RULE_SOURCES_KEY, JSON.stringify(obj));
+        window.dispatchEvent(new CustomEvent('ria-temp-rule-sources-changed', { detail: { worldId: currentWorldId } }));
+      }
+    }
+  } catch {
+    // ignore
+  }
+  setTempMountAllActive(false);
+
+  // 退出测绘：强制关闭并清空“曲线输入”临时容器（避免残留与抑制状态遗留）
+  curveInputTRef.current?.requestCloseAndClear?.();
+
   // 关闭测绘与面板
   setMeasuringActive(false);
   setMeasureDropdownOpen(false);
@@ -475,15 +553,11 @@ const confirmExitAndClear = (actionLabel: string) => {
   setMeasuringVariant('full');
   setWorkflowRunning(false);
 
+  // 复位要素类型/附加信息选择状态（避免残留）
+  resetFeatureSelectionState();
 
   // 清空测绘图层（fixed + draft）及状态
   clearAllLayers();
-
-  // 退出测绘时：附加信息与特殊格式草稿一并复位（避免下次进入残留上次 UI）
-  setSubType('默认');
-  setFeatureInfo({});
-  setGroupInfo({});
-  resetSpecialDrafts();
 
   // 额外确保草稿容器也清掉（避免残留）
   draftGeomRef.current?.clearLayers();
@@ -497,6 +571,23 @@ const confirmExitAndClear = (actionLabel: string) => {
 
   return true;
 };
+
+useImperativeHandle(ref, () => ({
+  requestCloseAndClear: (actionLabel?: string) => {
+    const label = (actionLabel ?? '关闭测绘').trim() || '关闭测绘';
+
+    const hasMeasuringContent =
+      measuringActive ||
+      (layersRef.current?.length ?? 0) > 0 ||
+      drawing ||
+      editingLayerId !== null ||
+      tempPoints.length > 0 ||
+      tempMountAllActive;
+
+    if (!hasMeasuringContent) return true;
+    return confirmExitAndClear(label);
+  },
+}));
 
 // ===== 模式切换（完整 <-> 快捷） =====
 // 目标：
@@ -531,6 +622,9 @@ const clearTemporaryForVariantSwitch = () => {
   workflowRootRef.current?.clearLayers();
   workflowPreviewMapRef.current.clear();
   clearDraftOverlays();
+
+  // 曲线输入也属于临时容器
+  curveInputTRef.current?.requestCloseAndClear?.();
 
   // 编辑/绘制态复位
   setTempPoints([]);
@@ -589,11 +683,8 @@ const startMeasuringFromMenu = (variant: 'full' | 'workflow') => {
   // 进入测绘前清空
   clearAllLayers();
 
-  // 打开测绘时：附加信息与特殊格式草稿复位到初始状态
-  setSubType('默认');
-  setFeatureInfo({});
-  setGroupInfo({});
-  resetSpecialDrafts();
+  // 复位要素类型/附加信息选择状态（避免上一次编辑残留）
+  resetFeatureSelectionState();
 
   setMeasuringVariant(variant);
   setWorkflowRunning(false);
@@ -660,6 +751,9 @@ useEffect(() => {
   if (!map) return;
 
   const handleClick = (e: L.LeafletMouseEvent) => {
+    // 曲线输入面板开启时：主绘制/编辑区完全冻结
+    if (curveInputFrozenRef.current) return;
+
     // 关键：ControlPointsT 工作时，绘制监听器必须完全不执行
     // （否则同一次 click 会同时触发“移动控制点”和“绘制加点”，导致草稿线变长）
     if (controlPointsTRef.current?.isBusy?.()) return;
@@ -731,6 +825,9 @@ const updateLatestEndpointMarker = (p: { x: number; z: number }, color: string) 
 
 
 const onMapDrawClick = (e: L.LeafletMouseEvent) => {
+  // 曲线输入面板开启时：主绘制/编辑区完全冻结
+  if (curveInputFrozenRef.current) return;
+
   // 双保险：即使某些情况下旧 click handler 没卸载，这里也确保不加点
   if (controlPointsTRef.current?.isBusy?.()) return;
   if (drawClickSuppressedRef.current) return;
@@ -764,6 +861,7 @@ const onMapDrawClick = (e: L.LeafletMouseEvent) => {
 
 const onManualPointSubmit = (v: { x: number; y: number; z: number }) => {
   if (!measuringActive || !drawing || drawMode === 'none') return;
+  if (curveInputFrozenRef.current) return;
   if (controlPointsTRef.current?.isBusy?.()) return;
   if (drawClickSuppressedRef.current) return;
 
@@ -1247,6 +1345,7 @@ const getLayerJSONOutput = (layer: LayerType) => {
   return layerToJsonText(layer);
 };
 
+
 const getLayersJSONOutputBySubType = (target: FeatureKey | '__ALL__') => {
   const items = layers
     .filter((l) => Boolean(l?.jsonInfo?.featureInfo))
@@ -1276,6 +1375,98 @@ const getAvailableSubTypes = (): FeatureKey[] => {
   }
   return Array.from(set) as FeatureKey[];
 };
+
+// ======== JSON 导出：按 WORKFLOW_FEATURE_CATALOG 分划（更细粒度筛选） ========
+type WorkflowCatalogExportKey = `__WF__:${string}`;
+
+const readString1 = (obj: any, keys: string[]) => {
+  for (const k of keys) {
+    const s = String(obj?.[k] ?? '').trim();
+    if (s) return s;
+  }
+  return '';
+};
+
+/**
+ * 字段解析接口（导出筛选用 Kind/SKind/SKind2 三元组）
+ *
+ * 说明：通用要素集在不同几何类型下采用不同字段命名：
+ * - 面（Polygon）：PGonKind / PGonSKind / PGonSKind2
+ * - 线（Polyline，ISL）：PLineKind / PLineSKind / PLineSKind2
+ * - 点（Point，ISP）：PointKind / PointSKind / PointSKind2
+ * - 兼容旧/杂项：Kind / SKind / SKind2
+ *
+ * 后续如需新增来源字段，请在此处集中扩展。
+ */
+const extractKindTripletFromFeatureInfo = (fi: any): { Kind: string; SKind: string; SKind2: string } => {
+  const Kind =
+    readString1(fi, ['Kind', 'PGonKind', 'PLineKind', 'PointKind']) ||
+    readString1(fi?.tags, ['Kind', 'PGonKind', 'PLineKind', 'PointKind']) ||
+    readString1(fi, ['Class']) ||
+    '';
+  const SKind =
+    readString1(fi, ['SKind', 'PGonSKind', 'PLineSKind', 'PointSKind']) ||
+    readString1(fi?.tags, ['SKind', 'PGonSKind', 'PLineSKind', 'PointSKind']) ||
+    '';
+  const SKind2 =
+    readString1(fi, ['SKind2', 'PGonSKind2', 'PLineSKind2', 'PointSKind2']) ||
+    readString1(fi?.tags, ['SKind2', 'PGonSKind2', 'PLineSKind2', 'PointSKind2']) ||
+    '';
+  return { Kind, SKind, SKind2 };
+};
+
+const buildWorkflowCatalogKey = (triplet: { Kind: string; SKind: string; SKind2: string }): WorkflowCatalogExportKey =>
+  (`__WF__:${triplet.Kind}/${triplet.SKind}/${triplet.SKind2}` as WorkflowCatalogExportKey);
+
+const parseWorkflowCatalogKey = (key: string): { Kind: string; SKind: string; SKind2: string } | null => {
+  const s = String(key ?? '');
+  if (!s.startsWith('__WF__:')) return null;
+  const rest = s.slice('__WF__:'.length);
+  const parts = rest.split('/');
+  return { Kind: parts[0] ?? '', SKind: parts[1] ?? '', SKind2: parts[2] ?? '' };
+};
+
+const getAvailableWorkflowCatalogKeys = (): Array<{ key: WorkflowCatalogExportKey; label: string }> => {
+  const seen = new Set<string>();
+  const out: Array<{ key: WorkflowCatalogExportKey; label: string }> = [];
+
+  for (const l of layers) {
+    const fi = l?.jsonInfo?.featureInfo ?? {};
+    const t = extractKindTripletFromFeatureInfo(fi);
+    if (!t.Kind) continue;
+
+    // 仅列出注册表中存在的条目（避免按钮膨胀/无法解释）
+    const hit = WORKFLOW_FEATURE_CATALOG.find((e) => e.kind === t.Kind && e.skind === t.SKind && e.skind2 === t.SKind2);
+    if (!hit) continue;
+
+    const k = buildWorkflowCatalogKey(t);
+    if (seen.has(k)) continue;
+    seen.add(k);
+
+    // UI 按键仅显示 name，避免因承载过多字段导致按钮堆叠拥挤。
+    out.push({ key: k, label: hit.name });
+  }
+
+  return out.sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+};
+
+const getLayersJSONOutputByWorkflowCatalogKey = (key: WorkflowCatalogExportKey): string => {
+  const t = parseWorkflowCatalogKey(key);
+  if (!t) return '[]';
+
+  const filtered = layers.filter((l) => {
+    const fi = l?.jsonInfo?.featureInfo ?? {};
+    const k = extractKindTripletFromFeatureInfo(fi);
+    return k.Kind === t.Kind && k.SKind === t.SKind && k.SKind2 === t.SKind2;
+  });
+
+  const items = filtered
+    .map((l) => l?.jsonInfo?.featureInfo)
+    .filter(Boolean);
+
+  return JSON.stringify(items, null, 2);
+};
+
 
 const getLayerDisplayTitle = (l: LayerType) => {
   const fi = l?.jsonInfo?.featureInfo;
@@ -1308,6 +1499,70 @@ const getLayerPrimaryIdValue = (l: LayerType): string => {
     ? (def.fields.find((f: any) => typeof f?.key === 'string' && (String(f.key).endsWith('ID') || String(f.key).endsWith('Id') || String(f.key).endsWith('id')))?.key as string | undefined)
     : undefined;
   return idKey ? String((fi as any)[idKey] ?? '').trim() : '';
+};
+
+// 图层主 Name（用于简略CSV）：尽量与 getLayerDisplayTitle 保持一致的取值策略
+const getLayerPrimaryNameValue = (l: LayerType): string => {
+  const fi = l?.jsonInfo?.featureInfo;
+  const st = l?.jsonInfo?.subType as FeatureKey | undefined;
+  if (!fi || !st || !(FORMAT_REGISTRY as any)[st]) return '';
+  const def = (FORMAT_REGISTRY as any)[st] as any;
+  const nameKey = Array.isArray(def?.fields)
+    ? (def.fields.find((f: any) => typeof f?.key === 'string' && (String(f.key).endsWith('Name') || String(f.key).endsWith('name')))?.key as string | undefined)
+    : undefined;
+  return nameKey ? String((fi as any)[nameKey] ?? '').trim() : '';
+};
+
+// ===== 简略 CSV 导出（Type,Class,World,ID,Name） =====
+const csvEscape = (v: any) => {
+  const s = v === null || v === undefined ? '' : String(v);
+
+  // 额外处理少见“Unicode 换行符”，避免部分软件乱断行
+  const normalized = s.replace(/\u2028|\u2029/g, ' ');
+
+  const escaped = normalized.replace(/"/g, '""');
+  return /[",\n\r]/.test(escaped) ? `"${escaped}"` : escaped;
+};
+
+const buildBriefCsvFromLayers = (list: LayerType[], worldIdFallback: string) => {
+  const header = ['Type', 'Class', 'World', 'ID', 'Name'];
+
+  // Windows/Excel 更稳：用 CRLF
+  const CRLF = '\r\n';
+
+  const rows = list.map((l) => {
+    const fi: any = l?.jsonInfo?.featureInfo ?? {};
+    const cls = String((l?.jsonInfo?.subType ?? '默认') as any);
+
+    const type =
+      (fi?.Type ?? fi?.type) ??
+      (l.mode === 'point' ? 'Point' : l.mode === 'polyline' ? 'Line' : 'Polygon');
+    const world = (fi?.World ?? fi?.world ?? worldIdFallback) ?? '';
+    const id = getLayerPrimaryIdValue(l);
+    const name = getLayerPrimaryNameValue(l);
+
+    return [type, cls, world, id, name].map(csvEscape).join(',');
+  });
+
+  // 加 BOM：Excel/WPS 双击打开更容易识别 UTF-8
+  return `\uFEFF${header.join(',')}${CRLF}${rows.join(CRLF)}${CRLF}`;
+};
+
+const downloadTextFile = (text: string, filename: string, mime: string) => {
+  try {
+    // 这里 text 已含 BOM；如果你不想在 text 里加 BOM，也可以 Blob 前加 bytes
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    // ignore
+  }
 };
 
 const readTempRuleSources = (): Record<string, TempRuleSource[]> => {
@@ -1614,7 +1869,7 @@ const editLayer = (id: number) => {
 
     const hydrated = def.hydrate(layer.jsonInfo.featureInfo ?? {});
     setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
+    setGroupInfo(normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any));
   } else {
     setSubType('默认');
     const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
@@ -1672,12 +1927,41 @@ const handleImport = () => {
   }
 
   // ---------- 批量导入：只支持“新规范 JSON 条目”，不识别点/线/面默认文本坐标，也不识别“默认”JSON ----------
-  if (importFormat === '批量') {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      alert('批量导入只支持合法 JSON：' + e);
+    const tryParseFlexible = (raw: string): any => {
+      const t = String(raw ?? '').trim();
+      if (!t) return null;
+
+      // 1) 直接 JSON.parse（支持：数组、对象、单条对象）
+      try {
+        return JSON.parse(t);
+      } catch {
+        // ignore
+      }
+
+      // 2) 宽容：允许“多条对象”但外层未包 []：
+      //   - "{...},{...}" 或 "{...}\n{...}"
+      //   - 处理：把 "}\s*{" 变为 "},{", 再外包 [...]
+      // 注意：这不是完整的 JSON 修复器，但对常见粘贴格式足够。
+      const normalized = t
+        .replace(/\r\n/g, '\n')
+        .replace(/\n+/g, '\n')
+        .replace(/}\s*,\s*{/g, '},{')
+        .replace(/}\s*\n\s*{/g, '},{')
+        .trim()
+        // 去掉可能的尾逗号
+        .replace(/,\s*$/g, '');
+
+      const wrapped = `[${normalized}]`;
+      try {
+        return JSON.parse(wrapped);
+      } catch {
+        return null;
+      }
+    };
+
+    const parsed = tryParseFlexible(text);
+    if (parsed === null || parsed === undefined) {
+      alert('批量导入只支持合法 JSON（可为数组/对象/单对象，或多对象但外层未包 []）。');
       return;
     }
 
@@ -1752,13 +2036,14 @@ const handleImport = () => {
 
       // hydrate 结果复用
       const hydrated = v.hydrated ?? def.hydrate(item);
+      const normGroups = normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any);
 
       const featureInfoOut = def.buildFeatureInfo({
         op: 'import',
         mode,
         coords,
         values: hydrated.values ?? {},
-        groups: hydrated.groups ?? {},
+        groups: normGroups,
         worldId: currentWorldId,
         prevFeatureInfo: item,
         now: new Date(),
@@ -1813,177 +2098,6 @@ const handleImport = () => {
     setImportText('');
     setImportPanelOpen(false);
     return;
-  }
-
-  const color = randomColor();
-
-  // ========== 1) 点 / 线 / 面（文本坐标） ==========
-  if (importFormat === '点' || importFormat === '线' || importFormat === '面') {
-    const coords = parseCoordListFlexible(text);
-    if (!coords) {
-      alert('非法输入：请用 x,z;x,z 或 x,y,z;x,y,z 格式');
-      return;
-    }
-
-    if (importFormat === '点' && coords.length !== 1) {
-      alert('点模式只允许 1 个坐标');
-      return;
-    }
-    if (importFormat === '线' && coords.length < 2) {
-      alert('线模式至少需要 2 个坐标');
-      return;
-    }
-    if (importFormat === '面' && coords.length < 3) {
-      alert('面模式至少需要 3 个坐标');
-      return;
-    }
-
-    const mode: DrawMode =
-      importFormat === '点' ? 'point' :
-      importFormat === '线' ? 'polyline' : 'polygon';
-
-    const group = L.layerGroup();
-    const latlngs = coords.map(p => proj.locationToLatLng(p.x, 64, p.z));
-
-    if (mode === 'point') {
-      latlngs.forEach(ll => {
-        L.circleMarker(ll, { color, fillColor: color, radius: 6 }).addTo(group);
-      });
-    } else if (mode === 'polyline') {
-      L.polyline(latlngs, { color }).addTo(group);
-    } else {
-      L.polygon(latlngs, { color }).addTo(group);
-    }
-
-    const def = FORMAT_REGISTRY['默认'];
-    const featureInfoOut = def.buildFeatureInfo({
-      op: 'import',
-      mode,
-      coords,
-      values: {},
-      groups: {},
-      worldId: currentWorldId,
-      now: new Date(),
-    });
-
-    const id = nextLayerId.current++;
-    const newLayer: LayerType = {
-      id,
-      mode,
-      color,
-      coords,
-      visible: true,
-      leafletGroup: group,
-      jsonInfo: {
-        subType: '默认',
-        featureInfo: featureInfoOut,
-      },
-    };
-
-    setLayers(prev => {
-      const next = [...prev, newLayer];
-      syncFixedRoot(next, editingLayerId);
-      return next;
-    });
-
-    setImportText('');
-    setImportPanelOpen(false);
-    return;
-  }
-
-  // ========== 2) JSON（单类型：按 importFormat 指定 FeatureKey）==========
-  let parsed: any;
-  try {
-    parsed = JSON.parse(text);
-  } catch (e) {
-    alert('非法 JSON：' + e);
-    return;
-  }
-
-  if (!Array.isArray(parsed)) {
-    alert('JSON 必须是数组');
-    return;
-  }
-
-  const key = importFormat as unknown as FeatureKey;
-  const def = FORMAT_REGISTRY[key];
-  if (!def) {
-    alert('未知导入格式：' + importFormat);
-    return;
-  }
-
-  const newLayers: LayerType[] = [];
-
-  for (let i = 0; i < parsed.length; i++) {
-    const item = parsed[i];
-    const itemColor = randomColor();
-
-    const v = validateImportItemDetailed(def, item, { worldId: currentWorldId, strictSystemFields: true });
-    if (!v.ok) {
-      const parts: string[] = [];
-      if (v.missing.length > 0) parts.push(`无法导入，部分必填的附加信息为空：\n${formatMissingEntries(v.missing)}`);
-      if (v.structuralErrors.length > 0) parts.push(`结构错误：${v.structuralErrors.join('；')}`);
-      alert(`${def.label} 第 ${i + 1} 项导入失败：\n${parts.join('\n')}`);
-      return;
-    }
-
-    const mode = v.mode;
-    const coords = v.coords;
-    const hydrated = v.hydrated ?? def.hydrate(item);
-
-    const featureInfoOut = def.buildFeatureInfo({
-      op: 'import',
-      mode,
-      coords,
-      values: hydrated.values ?? {},
-      groups: hydrated.groups ?? {},
-      worldId: currentWorldId,
-      prevFeatureInfo: item,
-      now: new Date(),
-    });
-
-    const group = L.layerGroup();
-
-    const yForDisplay =
-      Number.isFinite(Number(item?.height)) ? Number(item.height)
-      : Number.isFinite(Number(item?.heightH)) ? Number(item.heightH)
-      : 64;
-
-    const latlngs = coords.map(p => proj.locationToLatLng(p.x, yForDisplay, p.z));
-
-    if (mode === 'point') {
-      latlngs.forEach(ll => {
-        L.circleMarker(ll, { color: itemColor, fillColor: itemColor, radius: 6 }).addTo(group);
-      });
-    } else if (mode === 'polyline') {
-      L.polyline(latlngs, { color: itemColor }).addTo(group);
-    } else {
-      L.polygon(latlngs, { color: itemColor }).addTo(group);
-    }
-
-    const id = nextLayerId.current++;
-    newLayers.push({
-      id,
-      mode,
-      color: itemColor,
-      coords,
-      visible: true,
-      leafletGroup: group,
-      jsonInfo: {
-        subType: key,
-        featureInfo: featureInfoOut,
-      },
-    });
-  }
-
-  setLayers(prev => {
-    const next = [...prev, ...newLayers];
-    syncFixedRoot(next, editingLayerId);
-    return next;
-  });
-
-  setImportText('');
-  setImportPanelOpen(false);
 };
 
 
@@ -2089,6 +2203,65 @@ const makeEmptyItem = (fields: any[]) => {
   return obj;
 };
 
+// 用于 tags UI：如果导入/历史数据里出现不在 TAG_KEY_OPTIONS 中的 tagKey，
+// 则统一回显为：tagKey=其他，tagKeyOther=原始 key。
+const TAG_KEY_VALUE_SET = new Set(TAG_KEY_OPTIONS.map((o) => o.value));
+
+const normalizeGroupInfoByDef = (def: any, groups: Record<string, any[]>) => {
+  if (!def?.groups || !groups) return groups;
+  let changed = false;
+  const next: Record<string, any[]> = { ...groups };
+
+  // tags：未知 key -> 其他
+  const hasTags = def.groups.some((g: any) => g.key === 'tags');
+  if (hasTags) {
+    const items = Array.isArray(groups.tags) ? groups.tags : [];
+    const mapped = items.map((it: any) => {
+      const rawKey = String(it?.tagKey ?? '').trim();
+      if (!rawKey) return it;
+      if (rawKey === TAG_KEY_OTHER) {
+        const other = String(it?.tagKeyOther ?? '').trim();
+        if (other !== String(it?.tagKeyOther ?? '')) {
+          changed = true;
+          return { ...it, tagKeyOther: other };
+        }
+        return it;
+      }
+      if (!TAG_KEY_VALUE_SET.has(rawKey)) {
+        changed = true;
+        return { ...it, tagKey: TAG_KEY_OTHER, tagKeyOther: rawKey };
+      }
+      return it;
+    });
+    if (mapped !== items) {
+      next.tags = mapped;
+    }
+  }
+
+  // extensions：确保 extType 缺省时有默认值；null 类型时清空 extValue
+  const hasExt = def.groups.some((g: any) => g.key === 'extensions');
+  if (hasExt) {
+    const items = Array.isArray(groups.extensions) ? groups.extensions : [];
+    const mapped = items.map((it: any) => {
+      const t = (it?.extType ?? EXT_VALUE_TYPE_TEXT) as string;
+      if (t !== it?.extType) {
+        changed = true;
+        return { ...it, extType: t, extValue: t === EXT_VALUE_TYPE_NULL ? '' : it?.extValue ?? '' };
+      }
+      if (t === EXT_VALUE_TYPE_NULL && String(it?.extValue ?? '').trim() !== '') {
+        changed = true;
+        return { ...it, extValue: '' };
+      }
+      return it;
+    });
+    if (mapped !== items) {
+      next.extensions = mapped;
+    }
+  }
+
+  return changed ? next : groups;
+};
+
 const renderDynamicExtraInfo = () => {
   const hasFields = Array.isArray(activeDef?.fields) && activeDef.fields.length > 0;
   const hasGroups = Array.isArray(activeDef?.groups) && activeDef.groups.length > 0;
@@ -2110,55 +2283,268 @@ const renderDynamicExtraInfo = () => {
         <div className="space-y-3">
           {activeDef.groups!.map((g: any) => {
             const items: any[] = (groupInfo?.[g.key] ?? []) as any[];
+            const safeItems = items;
+
+            // ---------- extensions Step A/B：按 extGroup 分区 + 值类型选择逻辑 ----------
+            const renderExtensionsGroup = () => {
+              const extItems: any[] = safeItems;
+              const byGroup = new Map<string, any[]>();
+              for (const it of extItems) {
+                const gg = String(it?.extGroup ?? '').trim() || '未命名';
+                if (!byGroup.has(gg)) byGroup.set(gg, []);
+                byGroup.get(gg)!.push(it);
+              }
+
+              const addGroup = () => {
+                const gg = newExtGroupInput.trim();
+                if (!gg) return;
+                const next = extItems.concat([
+                  {
+                    extGroup: gg,
+                    extKey: '',
+                    extType: EXT_VALUE_TYPE_TEXT,
+                    extValue: '',
+                  },
+                ]);
+                setGroupItems(g.key, next);
+                setNewExtGroupInput('');
+              };
+
+              const addFieldToGroup = (gg: string) => {
+                const next = extItems.concat([
+                  {
+                    extGroup: gg === '未命名' ? '' : gg,
+                    extKey: '',
+                    extType: EXT_VALUE_TYPE_TEXT,
+                    extValue: '',
+                  },
+                ]);
+                setGroupItems(g.key, next);
+              };
+
+              const deleteGroup = (gg: string) => {
+                const next = extItems.filter((it) => {
+                  const g2 = String(it?.extGroup ?? '').trim() || '未命名';
+                  return g2 !== gg;
+                });
+                setGroupItems(g.key, next);
+              };
+
+              const updateItem = (idxInAll: number, patch: Record<string, any>) => {
+                const next = extItems.slice();
+                const cur = { ...(next[idxInAll] ?? {}) };
+                const merged = { ...cur, ...patch };
+                // Step B：extType==null 时清空并禁用 extValue（UI 禁用在渲染里做）
+                if (merged.extType === EXT_VALUE_TYPE_NULL) merged.extValue = '';
+                next[idxInAll] = merged;
+                setGroupItems(g.key, next);
+              };
+
+              const removeItem = (idxInAll: number) => {
+                setGroupItems(g.key, extItems.filter((_, i) => i !== idxInAll));
+              };
+
+              // 为了在 grouped 渲染里能定位到“全局数组索引”，我们建立一次映射
+              const indexOfItem = new Map<any, number>();
+              extItems.forEach((it, i) => indexOfItem.set(it, i));
+
+              const sortedGroups = Array.from(byGroup.keys()).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 border p-1 rounded text-sm"
+                      placeholder="新增扩展组 extGroup（例如 poi / note）"
+                      value={newExtGroupInput}
+                      onChange={(e) => setNewExtGroupInput(e.target.value)}
+                    />
+                    <AppButton
+                      className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                      type="button"
+                      onClick={addGroup}
+                    >
+                      新增组
+                    </AppButton>
+                  </div>
+
+                  {sortedGroups.length === 0 ? (
+                    <div className="text-xs text-gray-500">暂无条目</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {sortedGroups.map((gg) => {
+                        const rows = byGroup.get(gg) ?? [];
+                        return (
+                          <div key={gg} className="border rounded p-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-semibold">{gg}</div>
+                              <div className="flex items-center gap-2">
+                                <AppButton
+                                  className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                                  type="button"
+                                  onClick={() => addFieldToGroup(gg)}
+                                >
+                                  添加字段
+                                </AppButton>
+                                <AppButton
+                                  className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                                  type="button"
+                                  onClick={() => deleteGroup(gg)}
+                                >
+                                  删除组
+                                </AppButton>
+                              </div>
+                            </div>
+
+                            {rows.length === 0 ? (
+                              <div className="text-xs text-gray-500">暂无字段</div>
+                            ) : (
+                              <div className="space-y-2">
+                                {rows.map((row) => {
+                                  const idxAll = indexOfItem.get(row) ?? -1;
+                                  const extType = String(row?.extType ?? EXT_VALUE_TYPE_TEXT);
+                                  const valueDisabled = extType === EXT_VALUE_TYPE_NULL;
+                                  return (
+                                    <div key={idxAll} className="border rounded p-2">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="text-xs font-semibold">#{idxAll + 1}</div>
+                                        <AppButton
+                                          className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                                          type="button"
+                                          onClick={() => removeItem(idxAll)}
+                                        >
+                                          删除
+                                        </AppButton>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                        <div>
+                                          <label className="block text-xs font-semibold mb-1">字段名(extKey)</label>
+                                          <input
+                                            type="text"
+                                            className="w-full border p-1 rounded"
+                                            value={row?.extKey ?? ''}
+                                            onChange={(e) => updateItem(idxAll, { extKey: e.target.value })}
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-xs font-semibold mb-1">值类型</label>
+                                          <select
+                                            className="w-full border p-1 rounded"
+                                            value={extType}
+                                            onChange={(e) => updateItem(idxAll, { extType: e.target.value })}
+                                          >
+                                            {EXT_VALUE_TYPE_OPTIONS.map((o) => (
+                                              <option key={o.value} value={o.value}>{o.label}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        <div className="sm:col-span-2">
+                                          <label className="block text-xs font-semibold mb-1">值(extValue)</label>
+                                          <input
+                                            type="text"
+                                            className={`w-full border p-1 rounded ${valueDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
+                                            disabled={valueDisabled}
+                                            placeholder={valueDisabled ? 'null 类型无需填写' : '请输入'}
+                                            value={row?.extValue ?? ''}
+                                            onChange={(e) => updateItem(idxAll, { extValue: e.target.value })}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            };
 
             return (
               <div key={g.key} className="border rounded p-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-semibold">{g.label}</div>
-                  <AppButton
-                    className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
-                    onClick={() => setGroupItems(g.key, [...items, makeEmptyItem(g.fields)])}
-                    type="button"
-                  >
-                    {g.addButtonText ?? '添加'}
-                  </AppButton>
+                  {g.key === 'extensions' ? null : (
+                    <AppButton
+                      className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                      onClick={() => setGroupItems(g.key, [...safeItems, makeEmptyItem(g.fields)])}
+                      type="button"
+                    >
+                      {g.addButtonText ?? '添加'}
+                    </AppButton>
+                  )}
                 </div>
 
-                {items.length === 0 ? (
-                  <div className="text-xs text-gray-500">暂无条目</div>
+                {g.key === 'extensions' ? (
+                  renderExtensionsGroup()
                 ) : (
-                  <div className="space-y-2">
-                    {items.map((it, idx) => (
-                      <div key={idx} className="border rounded p-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs font-semibold">#{idx + 1}</div>
-                          <AppButton
-                            className="bg-red-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={() => setGroupItems(g.key, items.filter((_, i) => i !== idx))}
-                            type="button"
-                          >
-                            删除
-                          </AppButton>
-                        </div>
+                  safeItems.length === 0 ? (
+                    <div className="text-xs text-gray-500">暂无条目</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {safeItems.map((it, idx) => (
+                        <div key={idx} className="border rounded p-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold">#{idx + 1}</div>
+                            <AppButton
+                              className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                              onClick={() => setGroupItems(g.key, safeItems.filter((_, i) => i !== idx))}
+                              type="button"
+                            >
+                              删除
+                            </AppButton>
+                          </div>
 
-                        <div>
-                          {g.fields.map((f: any) =>
-                            renderField(
-                              f,
-                              it?.[f.key],
-                              (v) => {
-                                const nextItems = items.slice();
-                                const nextItem = { ...(nextItems[idx] ?? {}) };
-                                nextItem[f.key] = v;
-                                nextItems[idx] = nextItem;
-                                setGroupItems(g.key, nextItems);
+                          <div>
+                            {g.fields.map((f: any) => {
+                              // tags：仅当字段名=其他时显示 tagKeyOther
+                              if (g.key === 'tags' && f.key === 'tagKeyOther') {
+                                const k = String(it?.tagKey ?? '').trim();
+                                if (k !== TAG_KEY_OTHER) return null;
                               }
-                            )
-                          )}
+
+                              return renderField(
+                                f,
+                                it?.[f.key],
+                                (v) => {
+                                  const nextItems = safeItems.slice();
+                                  const nextItem = { ...(nextItems[idx] ?? {}) };
+
+                                  // tags：切换字段名时处理“其他字段名”联动
+                                  if (g.key === 'tags' && f.key === 'tagKey') {
+                                    const vv = String(v ?? '').trim();
+                                    nextItem.tagKey = vv;
+                                    if (vv !== TAG_KEY_OTHER) {
+                                      // 非“其他”：清空 tagKeyOther，避免一直显示/残留
+                                      nextItem.tagKeyOther = '';
+                                    } else {
+                                      // “其他”：如为空则保留用户已有输入
+                                      nextItem.tagKeyOther = String(nextItem.tagKeyOther ?? '').trim();
+                                    }
+                                    nextItems[idx] = nextItem;
+                                    setGroupItems(g.key, nextItems);
+                                    return;
+                                  }
+
+                                  nextItem[f.key] = v;
+                                  nextItems[idx] = nextItem;
+                                  setGroupItems(g.key, nextItems);
+                                },
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -2272,6 +2658,17 @@ const handleDrawModeButtonClick = (m: 'point' | 'polyline' | 'polygon') => {
 const workflowRegistry: WorkflowRegistry = {
   railway: RailwayWorkflow,
   station: StationWorkflow,
+  ngf_land: NaturalLandWorkflow,
+  ngf_lis: NaturalLandSurfaceWorkflow,
+  ngf_wtb: NaturalWaterbodyWorkflow,
+  ngf_wtr: NaturalWaterwayWorkflow,
+  ngf_bod: NaturalBoundaryWorkflow,
+  adm_dbz_set: SettlementBoundaryDeterminedWorkflow,
+  adm_plz_plan: SettlementBoundaryPlannedWorkflow,
+  adm_line_settlement: SettlementBoundaryLineWorkflow,
+  adm_point_special: SpecialCulturalPointWorkflow,
+  bud_building: BuildingWorkflow,
+  flr_unit: FloorUnitWorkflow,
 };
 
 const stopWorkflowToSelector = () => {
@@ -2663,6 +3060,7 @@ const workflowBridge: WorkflowBridge = {
       {(() => {
         const busy = (drawing && drawMode !== 'none') || editingLayerId !== null;
         const visibleList = layers.filter((l) => l.id !== editingLayerId);
+        const hasDefaultLayer = visibleList.some((l) => (l?.jsonInfo?.subType ?? '默认') === '默认');
 
         return (
           <>
@@ -2696,7 +3094,38 @@ const workflowBridge: WorkflowBridge = {
               <AppButton
                 type="button"
                 className={`px-2 py-1 text-sm rounded border ${
-                  busy || visibleList.length === 0
+                  busy || visibleList.length === 0 || hasDefaultLayer
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
+                    : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
+                }`}
+                title={
+                  busy
+                    ? '当前有要素正在编辑/绘制，无法导出'
+                    : visibleList.length === 0
+                      ? '暂无图层'
+                      : hasDefaultLayer
+                        ? '存在默认图层，无法导出简略CSV'
+                        : '导出 Type,Class,World,ID,Name 简略CSV（便于快速维护检查）'
+                }
+                disabled={busy || visibleList.length === 0 || hasDefaultLayer}
+                onClick={() => {
+                  if (busy || visibleList.length === 0 || hasDefaultLayer) return;
+                  const csv = buildBriefCsvFromLayers(visibleList, currentWorldId);
+                  const now = new Date();
+                  const y = String(now.getFullYear());
+                  const m = String(now.getMonth() + 1).padStart(2, '0');
+                  const d = String(now.getDate()).padStart(2, '0');
+                  const filename = `brief_${y}${m}${d}.csv`;
+                  downloadTextFile(csv, filename, 'text/csv;charset=utf-8');
+                }}
+              >
+                简略CSV文件
+              </AppButton>
+
+              <AppButton
+                type="button"
+                className={`px-2 py-1 text-sm rounded border ${
+                  busy || visibleList.length === 0 || (!tempMountAllActive && hasDefaultLayer)
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
                     : tempMountAllActive
                       ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700'
@@ -2707,11 +3136,13 @@ const workflowBridge: WorkflowBridge = {
                     ? '当前有要素正在编辑/绘制，请先保存'
                     : visibleList.length === 0
                       ? '暂无图层'
+                      : (!tempMountAllActive && hasDefaultLayer)
+                        ? '存在默认图层，无法挂载'
                       : tempMountAllActive
                         ? '取消临时挂载（存在即移除）'
                         : '临时挂载所有图层到规则图层（用于测试显示/去重/关联）'
                 }
-                disabled={busy || visibleList.length === 0}
+                disabled={busy || visibleList.length === 0 || (!tempMountAllActive && hasDefaultLayer)}
                 onClick={() => void toggleTempMountAllLayers(visibleList, busy)}
               >
                 {tempMountAllActive ? '取消临时挂载' : '临时挂载'}
@@ -2915,6 +3346,17 @@ const rightDockNode = (
     >
       <option value="railway">铁路</option>
       <option value="station">车站和站台</option>
+      <option value="ngf_land">自然要素-陆地</option>
+      <option value="ngf_lis">自然要素-陆面要素</option>
+      <option value="ngf_wtb">自然要素-水域</option>
+      <option value="ngf_wtr">自然要素-河道</option>
+      <option value="ngf_bod">自然要素-地理边界</option>
+      <option value="adm_dbz_set">聚落范围-确定范围</option>
+      <option value="adm_plz_plan">聚落范围-规划范围</option>
+      <option value="adm_line_settlement">聚落边界线要素</option>
+      <option value="adm_point_special">特殊人文点要素</option>
+      <option value="bud_building">建筑</option>
+      <option value="flr_unit">楼内单元</option>
     </select>
 
     <AppButton
@@ -2953,9 +3395,10 @@ onChange={(e) => {
       resetSpecialDrafts();
 
       setSubType(next);
-      const hydrated = FORMAT_REGISTRY[next].hydrate({});
+      const def = FORMAT_REGISTRY[next];
+      const hydrated = def.hydrate({});
       setFeatureInfo(hydrated.values ?? {});
-      setGroupInfo(hydrated.groups ?? {});
+      setGroupInfo(normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any));
     });
   });
 }}
@@ -3050,13 +3493,49 @@ onChange={(e) => {
   <GridSnapModeSwitch />
 </div>
 
-{/* 手动输入：不经过网格化再修正，仅允许整数或 .5 */}
-<ManualPointInput
-  enabled={measuringActive && drawing && drawMode !== 'none' && !showDraftControlPointsLocked}
-  activeMode={drawMode}
-  defaultY={-64}
-  onSubmit={onManualPointSubmit}
-/>
+{/* 手动输入 & 曲线输入：同一行并平分空间 */}
+<div className="flex gap-2 mb-2">
+  <ManualPointInput
+    enabled={measuringActive && drawing && drawMode !== 'none' && !showDraftControlPointsLocked && !drawClickSuppressed && !curveInputFrozen}
+    activeMode={drawMode}
+    defaultY={-64}
+    onSubmit={onManualPointSubmit}
+    outerClassName="flex-1"
+  />
+
+  <CurveInputT
+    ref={curveInputTRef}
+    enabled={measuringActive && drawing && (drawMode === 'polyline' || drawMode === 'polygon') && !showDraftControlPointsLocked}
+    externallySuppressed={drawClickSuppressed || curveInputFrozen}
+    mapReady={mapReady}
+    leafletMapRef={leafletMapRef}
+    projectionRef={projectionRef}
+    activeMode={drawMode}
+    outerClassName="flex-1"
+    // 曲线输入开启时：完全冻结主绘制/编辑交互（不影响 ControlPointsT 的抑制状态）
+    onSetDrawClickSuppressed={(v) => setCurveInputFrozenImmediate(v)}
+    filterWorldPointByAssistLine={(p) => {
+      const assist = assistLineToolsRef.current;
+      if (assist?.isEnabled?.()) {
+        const r = assist.transformWorldPoint(p);
+        return r?.point ?? p;
+      }
+      return p;
+    }}
+    onCommitPoints={(points) => {
+      if (!Array.isArray(points) || points.length === 0) return;
+
+      setRedoStack([]);
+      setTempPoints((prev) => {
+        const updated = [...prev, ...points];
+        drawDraftGeometry(updated, drawMode, drawColor);
+        const last = updated[updated.length - 1];
+        if (last) updateLatestEndpointMarker({ x: last.x, z: last.z }, drawColor);
+        return updated;
+      });
+    }}
+  />
+</div>
 
 
 {/* 辅助线 */}
@@ -3312,9 +3791,10 @@ onChange={(e) => {
   requestSwitchWithExtraWarn(() => {
     setSubType(next);
 
-    const hydrated = FORMAT_REGISTRY[next].hydrate({});
+    const def = FORMAT_REGISTRY[next];
+    const hydrated = def.hydrate({});
     setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
+    setGroupInfo(normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any));
   });
 }}
 
@@ -3582,42 +4062,16 @@ onChange={(e) => {
               </div>
 
               <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
-                <label className="block text-sm font-bold mb-1">格式</label>
-                <select
-                  value={importFormat}
-                  onChange={(e) => setImportFormat(e.target.value as ImportFormat)}
-                  className="w-full border p-2 rounded"
-                >
-<option value="点">点</option>
-<option value="线">线</option>
-<option value="面">面</option>
-<option value="批量">批量</option>
-<option value="车站">车站</option>
-<option value="铁路">铁路</option>
-<option value="站台">站台</option>
-<option value="站台轮廓">站台轮廓</option>
-<option value="车站建筑">车站建筑</option>
-<option value="车站建筑点">车站建筑点</option>
-<option value="车站建筑楼层">车站建筑楼层</option>
-<option value="地物点">地物点</option>
-<option value="地物线">地物线</option>
-<option value="地物面">地物面</option>
-<option value="建筑">建筑</option>
-<option value="建筑楼层">建筑楼层</option>
-                </select>
+                <div className="text-sm font-bold">格式</div>
+                <div className="text-xs text-gray-600">批量（JSON）</div>
+
 
                 <label className="block text-sm font-bold mb-1">数据输入</label>
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                   className="w-full border rounded p-2 text-sm"
-placeholder={
-  importFormat === '点' || importFormat === '线' || importFormat === '面'
-    ? '坐标文本：x,z;x,z 或 x,y,z;x,y,z'
-    : importFormat === '批量'
-      ? '批量 JSON：支持数组或 {items:[...]} / {features:[...]}。每条必须是“新规范 JSON”(含 Type/Class/World)，且 Class 必须可映射到已支持格式。'
-      : '单类型 JSON：数组，每条为该格式的 featureInfo 对象'
-}
+placeholder={'批量 JSON：支持数组或 {items:[...]} / {features:[...]}。也允许多条对象粘贴但外层未包 []（例如 {..},{..} 或 换行分隔）。\n每条必须是“新规范 JSON”(含 Type/Class/World)，且 Class 必须可映射到已支持格式。'}
                   rows={6}
                 />
 
@@ -3648,29 +4102,9 @@ placeholder={
             </div>
 
             <div className="p-4 space-y-3">
-              <label className="block text-sm font-bold mb-1">格式</label>
-              <select
-                value={importFormat}
-                onChange={(e) => setImportFormat(e.target.value as ImportFormat)}
-                className="w-full border p-2 rounded"
-              >
-<option value="点">点</option>
-<option value="线">线</option>
-<option value="面">面</option>
-<option value="批量">批量</option>
-<option value="车站">车站</option>
-<option value="铁路">铁路</option>
-<option value="站台">站台</option>
-<option value="站台轮廓">站台轮廓</option>
-<option value="车站建筑">车站建筑</option>
-<option value="车站建筑点">车站建筑点</option>
-<option value="车站建筑楼层">车站建筑楼层</option>
-<option value="地物点">地物点</option>
-<option value="地物线">地物线</option>
-<option value="地物面">地物面</option>
-<option value="建筑">建筑</option>
-<option value="建筑楼层">建筑楼层</option>
-              </select>
+              <div className="text-sm font-bold">格式</div>
+                <div className="text-xs text-gray-600">批量（JSON）</div>
+
 
               <label className="block text-sm font-bold mb-1">数据输入</label>
               <textarea
@@ -3749,6 +4183,30 @@ placeholder={
                 {k}
               </AppButton>
             ))}
+            {getAvailableWorkflowCatalogKeys().length > 0 && (
+              <>
+                <div className="mt-3 pt-2 border-t border-black/10 text-xs text-black/60">
+                  按目录（WORKFLOW_FEATURE_CATALOG）
+                </div>
+                {getAvailableWorkflowCatalogKeys().map((it) => (
+                  <AppButton
+                    key={it.key}
+                    type="button"
+                    className={`w-full px-2 py-1 text-sm rounded border ${
+                      jsonExportSubType === it.key
+                        ? 'bg-blue-600 text-white border-blue-700'
+                        : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    onClick={() => {
+                      setJsonExportSubType(it.key);
+                      setJsonPanelText(getLayersJSONOutputByWorkflowCatalogKey(it.key));
+                    }}
+                  >
+                    {it.label}
+                  </AppButton>
+                ))}
+              </>
+            )}
           </div>
         </div>
 
@@ -3904,4 +4362,6 @@ placeholder={
 
   </>
 );
-}
+});
+
+export default MeasuringModule;

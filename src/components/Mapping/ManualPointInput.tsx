@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 
 import { DraggablePanel } from '@/components/DraggablePanel/DraggablePanel';
-import { parseHalfStepNumber } from './GridSnapModeSwitch';
+import { parseStepNumber } from './GridSnapModeSwitch';
 import AppButton from '@/components/ui/AppButton';
 
 export interface ManualPointInputValue {
@@ -13,6 +13,9 @@ export interface ManualPointInputValue {
 }
 
 export interface ManualPointInputProps {
+  /** 外层容器 className（用于并排布局等） */
+  outerClassName?: string;
+
   /** 是否允许使用（例如 drawMode === 'none' 或当前不在绘制/编辑状态时禁用） */
   enabled?: boolean;
 
@@ -28,7 +31,7 @@ export interface ManualPointInputProps {
 
 const isValid = (n: number | null) => typeof n === 'number' && Number.isFinite(n);
 
-export default function ManualPointInput({ enabled = true, activeMode = 'none', defaultY = -64, onSubmit }: ManualPointInputProps) {
+export default function ManualPointInput({ enabled = true, activeMode = 'none', defaultY = -64, onSubmit, outerClassName }: ManualPointInputProps) {
   const [open, setOpen] = useState(false);
 
   const [xRaw, setXRaw] = useState('');
@@ -41,18 +44,18 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
 
   const title = useMemo(() => {
     if (disabled) return '手动输入：需先进入点/线/面绘制或编辑状态';
-    return '手动输入：仅允许整数或 .5（例如 10、10.5、-64、-64.5）';
+    return '手动输入：仅允许 0.1 步进（例如 10、10.1、-64、-64.3）';
   }, [disabled]);
 
   const submit = () => {
     if (disabled) return;
 
-    const x = parseHalfStepNumber(xRaw);
-    const y = parseHalfStepNumber(yRaw);
-    const z = parseHalfStepNumber(zRaw);
+    const x = parseStepNumber(xRaw);
+    const y = parseStepNumber(yRaw);
+    const z = parseStepNumber(zRaw);
 
     if (!isValid(x) || !isValid(y) || !isValid(z)) {
-      window.alert('手动输入坐标非法：x/y/z 仅允许输入整数或 .5 的数值。');
+      window.alert('手动输入坐标非法：x/y/z 仅允许输入 0.1 步进的数值。');
       return;
     }
 
@@ -69,7 +72,7 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const yDefault = parseHalfStepNumber(yRaw);
+    const yDefault = parseStepNumber(yRaw);
     const yFallback = isValid(yDefault) ? (yDefault as number) : defaultY;
 
     const points: ManualPointInputValue[] = [];
@@ -85,12 +88,12 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
         return { ok: false as const, error: `第 ${i + 1} 组坐标格式非法：需为 x,y,z 或 x,z（以 ; 分隔）。` };
       }
 
-      const x = parseHalfStepNumber(nums[0]);
-      const y = nums.length === 3 ? parseHalfStepNumber(nums[1]) : yFallback;
-      const z = parseHalfStepNumber(nums.length === 3 ? nums[2] : nums[1]);
+      const x = parseStepNumber(nums[0]);
+      const y = nums.length === 3 ? parseStepNumber(nums[1]) : yFallback;
+      const z = parseStepNumber(nums.length === 3 ? nums[2] : nums[1]);
 
       if (!isValid(x) || !isValid(y) || !isValid(z)) {
-        return { ok: false as const, error: `第 ${i + 1} 组坐标非法：仅允许整数或 .5 的数值。` };
+        return { ok: false as const, error: `第 ${i + 1} 组坐标非法：仅允许 0.1 步进的数值。` };
       }
 
       points.push({ x: x as number, y: y as number, z: z as number });
@@ -118,7 +121,7 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
   };
 
   return (
-    <div className="mb-2" title={title}>
+    <div className={outerClassName ?? 'mb-2'} title={title}>
       <AppButton
         type="button"
         className={`w-full px-2 py-1 rounded text-sm border ${
@@ -149,7 +152,7 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
 
       <div className="p-3">
         <div className="text-xs text-gray-600 mb-2">
-          仅允许整数或 .5。点击“完成”会按当前输入向绘制/编辑要素添加一个控制点。
+          仅允许 0.1 步进。点击“完成”会按当前输入向绘制/编辑要素添加一个控制点。
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -159,7 +162,7 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
               value={xRaw}
               onChange={(e) => setXRaw(e.target.value)}
               className="w-full px-2 py-1 border rounded text-sm"
-              placeholder="例如 10 / 10.5"
+              placeholder="例如 10 / 10.1"
             />
           </div>
 
@@ -169,7 +172,7 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
               value={yRaw}
               onChange={(e) => setYRaw(e.target.value)}
               className="w-full px-2 py-1 border rounded text-sm"
-              placeholder="例如 -64 / -64.5"
+              placeholder="例如 -64 / -64.3"
             />
           </div>
 
@@ -179,7 +182,7 @@ export default function ManualPointInput({ enabled = true, activeMode = 'none', 
               value={zRaw}
               onChange={(e) => setZRaw(e.target.value)}
               className="w-full px-2 py-1 border rounded text-sm"
-              placeholder="例如 20 / 20.5"
+              placeholder="例如 20 / 20.1"
             />
           </div>
         </div>

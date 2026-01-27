@@ -14,6 +14,10 @@ import { layoutLabelsOnMap, type LabelRequest, type AvoidRectPx } from './labelL
 import AppButton from '@/components/ui/AppButton';
 import AppCard from '@/components/ui/AppCard';
 
+import FeatureInteractionCard from './FeatureInteractionCard';
+import { makeLabelDivIcon } from './labelStyles';
+import { createHighlightLayerForFeature, makeClickableLabelMarker, type LabelClickPlan } from './labelClickInteraction';
+
 
 const FLOOR_VIEW_MIN_LEVEL = Math.max(0, DEFAULT_FLOOR_VIEW.minLevel);
 
@@ -235,52 +239,26 @@ function getFeatureBoundsLatLng(
 }
 
 
+
 function makeLabelMarker(
   latlng: L.LatLng,
   text: string,
   placement: 'center' | 'near',
   withDot?: boolean,
-  offsetY?: number, // ✅ 新增：第5个参数，放最后，避免改其他调用点
+  offsetY?: number,
+  styleKey?: any, // string key; 类型由 labelStyles 维护
 ) {
-  const safe = String(text ?? '').replace(/[<>&]/g, (m) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' } as any)[m]);
-
-  // 原本的位移逻辑保持不变
-  const transform = placement === 'near' ? 'translate(-50%, -120%)' : 'translate(-50%, -50%)';
-
-  // ✅ 只对 near 再额外上移（px）。center 不动，避免影响面要素中心标注。
-  const extraMarginTop = placement === 'near' ? -(Number(offsetY ?? 0)) : 0;
-
-  const dotHtml = withDot
-    ? `<span style="
-         display:inline-block;
-         width:8px;height:8px;
-         border-radius:999px;
-         background:#fff;
-         margin-right:6px;
-         box-shadow:0 0 0 2px rgba(0,0,0,0.35);
-       "></span>`
-    : '';
-
-  const html = `
-    <div style="
-      background: rgba(0,0,0,0.65);
-      color: #fff;
-      padding: 2px 6px;
-      border-radius: 6px;
-      font-size: 12px;
-      white-space: nowrap;
-      transform: ${transform};
-      margin-top: ${extraMarginTop}px;   /* ✅ 新增 */
-      pointer-events: none;
-      display: inline-flex;
-      align-items: center;
-    ">${dotHtml}${safe}</div>
-  `;
+  const icon = makeLabelDivIcon((styleKey ?? 'bubble-dark') as any, String(text ?? ''), {
+    placement,
+    withDot: !!withDot,
+    offsetY,
+    interactive: false,
+  });
 
   return L.marker(latlng, {
     interactive: false,
     pane: 'ria-label',
-    icon: L.divIcon({ className: '', html, iconSize: [0, 0] }),
+    icon,
   });
 }
 
@@ -348,6 +326,11 @@ export default function RuleDrivenLayer(props: Props) {
   const { mapReady, map, projection, worldId, visible } = props;
 
   const rootRef = useRef<L.LayerGroup | null>(null);
+  const highlightGroupRef = useRef<L.LayerGroup | null>(null);
+
+  const [selectedFeature, setSelectedFeature] = useState<FeatureRecord | null>(null);
+  const [featureCardOpen, setFeatureCardOpen] = useState(false);
+
   const cacheRef = useRef<Map<string, LayerBundle>>(new Map());
   const recordsRef = useRef<FeatureRecord[]>([]);
   const storeRef = useRef<FeatureStore | null>(null);
@@ -439,27 +422,21 @@ useEffect(() => {
   async function load() {
     if (!mapReady) return;
     const ds = RULE_DATA_SOURCES[worldId];
-    if (!ds || ds.files.length === 0) {
-      recordsRef.current = [];
-      storeRef.current = new FeatureStore([]);
-      setFloorOptions([]);
-      setActiveBuildingUid(null);
-      setActiveBuildingFloorRefSet(null);
-      setActiveBuildingName('');
-      return;
-    }
-
     const all: FeatureRecord[] = [];
 
     // (A) 固定数据源（public 下文件）
-    for (const file of ds.files) {
-      const url = `${ds.baseUrl.replace(/\/$/, '')}/${file}`;
-      try {
-        const items = await fetchJsonArray(url);
-        all.push(...buildRecordsFromJson(items, file));
-      } catch (e) {
-        // 单文件失败不阻塞其余文件
-        console.warn(`[RuleDrivenLayer] failed to load ${url}`, e);
+    // 注意：即使该 world 没有配置 files，也不应直接 return。
+    // “临时挂载”应当仍然可以在该 world 中生效（用于测试显示/去重/关联）。
+    if (ds && Array.isArray(ds.files) && ds.files.length > 0) {
+      for (const file of ds.files) {
+        const url = `${ds.baseUrl.replace(/\/$/, '')}/${file}`;
+        try {
+          const items = await fetchJsonArray(url);
+          all.push(...buildRecordsFromJson(items, file));
+        } catch (e) {
+          // 单文件失败不阻塞其余文件
+          console.warn(`[RuleDrivenLayer] failed to load ${url}`, e);
+        }
       }
     }
 
@@ -479,6 +456,8 @@ useEffect(() => {
     }
 
     if (cancelled) return;
+
+    // 若固定源 + 临时源均为空：保持空 store，但仍要做一次 UI 复位
     recordsRef.current = all;
     const store = new FeatureStore(all);
     storeRef.current = store;
@@ -493,6 +472,12 @@ useEffect(() => {
     // 新数据 → 清空缓存，让渲染逻辑重新建 layer（避免旧 layer 残留）
     cacheRef.current.clear();
     rootRef.current?.clearLayers();
+
+    // ✅ 保持高亮图层组始终挂载（clearLayers 会移除它）
+    if (rootRef.current) {
+      if (!highlightGroupRef.current) highlightGroupRef.current = L.layerGroup();
+      rootRef.current.addLayer(highlightGroupRef.current);
+    }
 
     // 重置楼层态
     setFloorOptions([]);
@@ -516,7 +501,11 @@ useEffect(() => {
   // (3) 总开关：挂载/卸载 root layerGroup
   useEffect(() => {
     if (!mapReady) return;
-    if (!rootRef.current) rootRef.current = L.layerGroup();
+    if (!rootRef.current) {
+      rootRef.current = L.layerGroup();
+      if (!highlightGroupRef.current) highlightGroupRef.current = L.layerGroup();
+      rootRef.current.addLayer(highlightGroupRef.current);
+    }
 
     if (!visible) {
       if (map.hasLayer(rootRef.current)) map.removeLayer(rootRef.current);
@@ -544,6 +533,81 @@ useEffect(() => {
   };
 }, [worldId, leafletZoomState, activeBuildingUid, activeBuildingFloorRefSet, floorOptions, activeFloorIndex]);
 
+  const handleLabelClick = (r: FeatureRecord, plan: LabelClickPlan) => {
+    if (!highlightGroupRef.current) highlightGroupRef.current = L.layerGroup();
+    highlightGroupRef.current.clearLayers();
+
+    const hl = createHighlightLayerForFeature({
+      r,
+      projection,
+      highlightStyleKey: (plan as any)?.highlightStyleKey,
+      pointPinStyleKey: (plan as any)?.pointPinStyleKey,
+    });
+    if (hl) highlightGroupRef.current.addLayer(hl);
+
+    if ((plan as any)?.openCard) {
+      setSelectedFeature(r);
+      setFeatureCardOpen(true);
+    }
+  };
+
+  /**
+   * ✅ 选中/高亮 与 通用信息框绑定：
+   * 当用户关闭信息框时，同时清空当前选中要素的点击高亮效果。
+   * 这更符合主流网络地图的交互逻辑：关闭详情 = 取消选中。
+   */
+  const clearSelection = () => {
+    highlightGroupRef.current?.clearLayers();
+    setFeatureCardOpen(false);
+    setSelectedFeature(null);
+  };
+
+  // =========================
+  // 信息卡“要素跳转”支持：
+  // - resolveFeatureById：用于在信息卡中将 id 映射为目标要素（显示 Name）
+  // - onTryTriggerLabelClickById：点击时尝试触发目标要素的 labelClick（若无则静默无反应）
+  // =========================
+  const resolveFeatureById = (id: string): FeatureRecord | undefined => {
+    const key = String(id ?? '').trim();
+    if (!key) return undefined;
+    const store = storeRef.current;
+    if (!store) return undefined;
+
+    // 优先走 byClassId 索引（跨 Class 扫一次 key）
+    for (const cls of Object.keys(store.byClassId)) {
+      const hit = store.byClassId[cls]?.[key];
+      if (hit && hit.length > 0) return hit[0];
+    }
+
+    // 兜底：线性扫描（可读性优先）
+    return store.all.find((r) => String(r?.meta?.idValue ?? '').trim() === key);
+  };
+
+  const onTryTriggerLabelClickById = (id: string) => {
+    const rr = resolveFeatureById(id);
+    if (!rr) return;
+
+    const store = storeRef.current;
+    if (!store) return;
+
+    const rule = findFirstRule(rr);
+    const rawClick = (rule as any)?.symbol?.labelClick;
+    if (!rawClick) return;
+
+    const clickPlan: any = typeof rawClick === 'function' ? rawClick(rr, ctx, store) : rawClick;
+    if (!clickPlan || !clickPlan.enabled) return;
+
+    handleLabelClick(rr, clickPlan as any);
+  };
+
+    // ✅ 跨世界切换时，清理选中态与高亮，避免“跨世界残留高亮/信息框”。
+  // 触发时机：worldId 变化（WorldSwitcher / 外部世界切换）。
+  useEffect(() => {
+    highlightGroupRef.current?.clearLayers();
+    setFeatureCardOpen(false);
+    setSelectedFeature(null);
+  }, [worldId]);
+
   // (3.5) 初始化自定义 panes：用于稳定控制遮挡顺序（避免“读入顺序导致覆盖”）
   useEffect(() => {
     if (!mapReady) return;
@@ -556,6 +620,9 @@ useEffect(() => {
 
     // 线/面默认层（接近 Leaflet overlayPane 的 400）
     ensurePane('ria-overlay', 410);
+
+    // 高亮线/面（在 overlay 之上、点之下）
+    ensurePane('ria-overlay-top', 640);
 
     // 点层：永远在面/线之上
     ensurePane('ria-point', 650);
@@ -800,6 +867,7 @@ const refresh = () => {
 
   // declutter labels：先收集 request，后统一跑布局，再回写到各个 bundle.label
   const declutterLabelRequests: LabelRequest[] = [];
+  const declutterLabelMeta = new Map<string, { styleKey: any; plan: LabelClickPlan | null; }>();
 
   // ✅ 新增：点图标避让矩形（屏幕像素）
 const avoidRectsPx: AvoidRectPx[] = [];
@@ -829,6 +897,10 @@ const avoidRectsPx: AvoidRectPx[] = [];
     }
     if (rule.visible && !rule.visible(r, context, store)) continue;
 
+    const rawClick = (rule.symbol as any)?.labelClick;
+    const clickPlan: LabelClickPlan | null = rawClick ? (typeof rawClick === 'function' ? rawClick(r, context, store) : rawClick) : null;
+    const labelOnly = !!(clickPlan && (clickPlan as any).enabled && (clickPlan as any).mode === 'labelOnly');
+
     // 屏幕范围裁剪（点/线/面统一做 bounds.contains）
     let pointLatLng: L.LatLng | undefined;
     if (r.type === 'Points' && r.p3) {
@@ -849,7 +921,7 @@ const avoidRectsPx: AvoidRectPx[] = [];
     }
 
 // ✅ 新增：把点符号当作“硬占用区”，用于 label 避让
-if (r.type === 'Points' && pointLatLng) {
+if (r.type === 'Points' && pointLatLng && !labelOnly) {
   const pt = map.latLngToContainerPoint(pointLatLng);
 
   const sym = rule.symbol;
@@ -888,27 +960,39 @@ if (r.type === 'Points' && pointLatLng) {
 
     shouldShow.add(r.uid);
 
+    // labelOnly：主几何不显示且不可交互（交互只发生在 label 上）
+    const hiddenSymbol = labelOnly
+      ? ({
+          ...(rule.symbol as any),
+          pathStyle: () => ({ opacity: 0, weight: 0, fillOpacity: 0, interactive: false, pane: (rule.symbol as any)?.pane ?? 'ria-overlay' }),
+          point: () => ({ kind: 'circle', radius: 1, style: { opacity: 0, fillOpacity: 0, weight: 0, interactive: false }, pane: (rule.symbol as any)?.pane ?? 'ria-point' }),
+        } as any)
+      : (rule.symbol as any);
+
     // 确保 layer 存在
     const existing = cacheRef.current.get(r.uid);
     if (!existing) {
-      const bundle = createLayerBundle(r, rule.symbol, context, store, projection);
+      const bundle = createLayerBundle(r, hiddenSymbol, context, store, projection, handleLabelClick);
       if (!bundle) continue;
       cacheRef.current.set(r.uid, bundle);
       root.addLayer(bundle.main);
       if (bundle.label) root.addLayer(bundle.label);
     } else {
       // 更新样式（动态色/透明度/楼层淡化）
-      updateLayerBundle(existing, r, rule.symbol, context, store, projection, root);
+      updateLayerBundle(existing, r, hiddenSymbol, context, store, projection, root, handleLabelClick);
       if (!root.hasLayer(existing.main)) root.addLayer(existing.main);
       if (existing.label && !root.hasLayer(existing.label)) root.addLayer(existing.label);
     }
 
     // LabelLayout：仅对声明了 labelPlan.declutter 的规则生效；其余 label 走旧逻辑
-    const labelPlan = rule.symbol?.label;
+    const rawLabelPlan = rule.symbol?.label;
+    const labelPlan = typeof rawLabelPlan === 'function' ? rawLabelPlan(r, context, store) : rawLabelPlan;
     if (labelPlan?.enabled && labelPlan.declutter) {
-      const req = buildLabelRequest(r, labelPlan, context, store, projection, pointLatLng);
+      const req = buildLabelRequest(r, labelPlan, context, store, projection, pointLatLng, clickPlan);
       if (req) {
         declutterLabelRequests.push(req);
+        const styleKey = (labelPlan as any)?.styleKey ?? (clickPlan as any)?.labelStyleKey ?? 'bubble-dark';
+        declutterLabelMeta.set(req.id, { styleKey, plan: (clickPlan && (clickPlan as any).enabled) ? clickPlan : null });
       } else {
         // 该要素当前不应显示 label（minLevel/text 空等）→ 移除旧 label
         const b = cacheRef.current.get(r.uid);
@@ -953,14 +1037,34 @@ if (r.type === 'Points' && pointLatLng) {
       const shifted = L.point(anchorPx.x + p.dx, anchorPx.y + p.dy);
       const ll = map.containerPointToLatLng(shifted);
 
-      const labelKey = `${p.text}|${req.placement}|${req.withDot ? 1 : 0}|${Number(req.offsetY ?? 0)}`;
+      const meta = declutterLabelMeta.get(req.id);
+        const plan = meta?.plan ?? null;
+        const styleKey = meta?.styleKey ?? 'bubble-dark';
+
+        const labelKey = `${p.text}|${req.placement}|${req.withDot ? 1 : 0}|${Number(req.offsetY ?? 0)}|${styleKey}|${plan ? 1 : 0}`;
 
       // 尽量复用 marker，避免每次 refresh 都重建
       if (b.label && b.label instanceof L.Marker && b.labelKey === labelKey) {
         b.label.setLatLng(ll);
       } else {
         if (b.label && root.hasLayer(b.label)) root.removeLayer(b.label);
-        b.label = makeLabelMarker(ll, p.text, req.placement, !!req.withDot, req.offsetY);
+        if (plan) {
+          b.label = makeClickableLabelMarker({
+            latlng: ll,
+            text: p.text,
+            placement: req.placement,
+            withDot: !!req.withDot,
+            offsetY: req.offsetY,
+            styleKey: (styleKey as any),
+            onClick: () => {
+              const uid = req.featureUid ?? '';
+              const rr = recordsRef.current.find((x) => x.uid === uid);
+              if (rr) handleLabelClick(rr, plan);
+            },
+          });
+        } else {
+          b.label = makeLabelMarker(ll, p.text, req.placement, !!req.withDot, req.offsetY, styleKey);
+        }
         b.labelKey = labelKey;
       }
 
@@ -1027,6 +1131,13 @@ if (r.type === 'Points' && pointLatLng) {
           </div>
         </AppCard>
       )}
+      <FeatureInteractionCard
+        open={featureCardOpen}
+        feature={selectedFeature}
+        onClose={clearSelection}
+        resolveFeatureById={resolveFeatureById}
+        onTryTriggerLabelClickById={onTryTriggerLabelClickById}
+      />
     </>
   );
 }
@@ -1037,8 +1148,23 @@ function createLayerBundle(
   ctx: RenderContext,
   store: FeatureStore,
   projection: DynmapProjection,
+  onLabelClick?: (r: FeatureRecord, plan: LabelClickPlan) => void,
 ): LayerBundle | null {
 
+  const resolvedLabelPlan = (typeof (symbol as any)?.label === 'function') ? (symbol as any).label(r, ctx, store) : (symbol as any)?.label;
+
+  const rawClick = (symbol as any)?.labelClick;
+  const clickPlan: LabelClickPlan | null = rawClick ? (typeof rawClick === 'function' ? rawClick(r, ctx, store) : rawClick) : null;
+  const clickEnabled = !!(clickPlan && (clickPlan as any).enabled);
+
+  // 【新增】几何点击扩展（最小入侵）：在规则的 labelClick.geom 开启后，点击主几何也触发与 label 点击一致的效果。
+  // - 仅在 mode === 'normal' 时生效；labelOnly 下主几何被隐藏且不可交互。
+  const geomAllowed = !!(clickEnabled && (clickPlan as any)?.mode === 'normal');
+  const geomPointEnabled = !!(geomAllowed && (clickPlan as any)?.geom?.point);
+  const geomPathEnabled = !!(geomAllowed && (clickPlan as any)?.geom?.path);
+
+  const labelStyleKey = ((resolvedLabelPlan as any)?.styleKey ?? (clickPlan as any)?.labelStyleKey ?? 'bubble-dark') as any;
+  const onClick = clickEnabled && onLabelClick ? () => onLabelClick(r, clickPlan as any) : undefined;
 
   // 点
   if (r.type === 'Points' && r.p3) {
@@ -1075,7 +1201,8 @@ function createLayerBundle(
         main = L.marker(latlng, {
           pane: mainPane,
           icon,
-          interactive: false,
+          // 仅在开启 geom.point 时让 marker 可点击；默认保持不可交互，避免影响其他逻辑。
+          interactive: geomPointEnabled,
           zIndexOffset: (plan as any)?.zIndexOffset ?? 0,
         });
         kind = 'marker';
@@ -1090,8 +1217,17 @@ function createLayerBundle(
       kind = 'circleMarker';
     }
 
+    // 【新增】几何点击：点要素本体点击（marker / circleMarker）
+    if (geomPointEnabled && clickEnabled && onLabelClick) {
+      (main as any).off?.('click');
+      (main as any).on?.('click', (e: L.LeafletMouseEvent) => {
+        (e as any)?.originalEvent?.stopPropagation?.();
+        onLabelClick(r, clickPlan as any);
+      });
+    }
+
     // label
-    const labelLayer = buildLabelLayer(r, symbol.label, ctx, store, projection, latlng);
+    const labelLayer = buildLabelLayer(r, resolvedLabelPlan, ctx, store, projection, latlng, labelStyleKey, clickEnabled ? (clickPlan as any) : null, onClick);
     return { main, label: labelLayer ?? undefined, kind, iconUrl, pane: mainPane };
   }
 
@@ -1107,10 +1243,19 @@ function createLayerBundle(
 
     const main =
       r.type === 'Polyline'
-        ? L.polyline(latlngs, { ...(style ?? {}), pane: mainPane })
-        : L.polygon(latlngs, { ...(style ?? {}), pane: mainPane });
+        ? L.polyline(latlngs, { ...(style ?? {}), pane: mainPane, interactive: geomPathEnabled ? true : (style as any)?.interactive })
+        : L.polygon(latlngs, { ...(style ?? {}), pane: mainPane, interactive: geomPathEnabled ? true : (style as any)?.interactive });
 
-    const labelLayer = buildLabelLayer(r, symbol.label, ctx, store, projection);
+    // 【新增】几何点击：线/面要素本体点击
+    if (geomPathEnabled && clickEnabled && onLabelClick) {
+      (main as any).off?.('click');
+      (main as any).on?.('click', (e: L.LeafletMouseEvent) => {
+        (e as any)?.originalEvent?.stopPropagation?.();
+        onLabelClick(r, clickPlan as any);
+      });
+    }
+
+    const labelLayer = buildLabelLayer(r, resolvedLabelPlan, ctx, store, projection, undefined, labelStyleKey, clickEnabled ? (clickPlan as any) : null, onClick);
     return { main, label: labelLayer ?? undefined, kind: 'path', pane: mainPane };
   }
 
@@ -1126,7 +1271,20 @@ function updateLayerBundle(
   store: FeatureStore,
   projection: DynmapProjection,
   root: L.LayerGroup,
+  onLabelClick?: (r: FeatureRecord, plan: LabelClickPlan) => void,
 ) {
+  const resolvedLabelPlan = (typeof (symbol as any)?.label === 'function') ? (symbol as any).label(r, ctx, store) : (symbol as any)?.label;
+
+  const rawClick = (symbol as any)?.labelClick;
+  const clickPlan: LabelClickPlan | null = rawClick ? (typeof rawClick === 'function' ? rawClick(r, ctx, store) : rawClick) : null;
+  const clickEnabled = !!(clickPlan && (clickPlan as any).enabled);
+
+  const geomAllowed = !!(clickEnabled && (clickPlan as any)?.mode === 'normal');
+  const geomPointEnabled = !!(geomAllowed && (clickPlan as any)?.geom?.point);
+  const geomPathEnabled = !!(geomAllowed && (clickPlan as any)?.geom?.path);
+
+  const labelStyleKey = ((resolvedLabelPlan as any)?.styleKey ?? (clickPlan as any)?.labelStyleKey ?? 'bubble-dark') as any;
+  const onClick = clickEnabled && onLabelClick ? () => onLabelClick(r, clickPlan as any) : undefined;
   // 点：若 iconUrl 变化，重建
   if (r.type === 'Points' && r.p3) {
     const latlng = projection.locationToLatLng(r.p3.x, r.p3.y, r.p3.z);
@@ -1143,12 +1301,16 @@ function updateLayerBundle(
       nextIconUrl = undefined;
     }
 
-    if (nextKind !== bundle.kind || nextIconUrl !== bundle.iconUrl) {
+    // marker 的 interactive 不能可靠地原地切换；若 geom.point 开关变化，直接重建最稳。
+    const nextMarkerInteractive = geomPointEnabled;
+    const curMarkerInteractive = bundle.kind === 'marker' ? !!((bundle.main as any)?.options?.interactive) : undefined;
+
+    if (nextKind !== bundle.kind || nextIconUrl !== bundle.iconUrl || (bundle.kind === 'marker' && curMarkerInteractive !== nextMarkerInteractive)) {
       // remove old
       if (root.hasLayer(bundle.main)) root.removeLayer(bundle.main);
       if (bundle.label && root.hasLayer(bundle.label)) root.removeLayer(bundle.label);
 
-      const newBundle = createLayerBundle(r, symbol, ctx, store, projection);
+      const newBundle = createLayerBundle(r, symbol, ctx, store, projection, onLabelClick);
       if (!newBundle) return;
       bundle.main = newBundle.main;
       bundle.label = newBundle.label;
@@ -1168,15 +1330,24 @@ function updateLayerBundle(
       bundle.main.setLatLng(latlng);
     }
 
+    // 【新增】几何点击：点要素（更新时重绑）
+    (bundle.main as any).off?.('click');
+    if (geomPointEnabled && clickEnabled && onLabelClick) {
+      (bundle.main as any).on?.('click', (e: L.LeafletMouseEvent) => {
+        (e as any)?.originalEvent?.stopPropagation?.();
+        onLabelClick(r, clickPlan as any);
+      });
+    }
+
     // label refresh
     // - 若使用 declutter：不在这里动 label，交由 refresh() 的统一布局阶段处理（避免闪烁/卡顿）
-    if (symbol.label?.declutter) return;
+    if ((resolvedLabelPlan as any)?.declutter) return;
     if (bundle.label) {
       if (root.hasLayer(bundle.label)) root.removeLayer(bundle.label);
       bundle.label = undefined;
       bundle.labelKey = undefined;
     }
-    const labelLayer = buildLabelLayer(r, symbol.label, ctx, store, projection, latlng);
+    const labelLayer = buildLabelLayer(r, resolvedLabelPlan, ctx, store, projection, latlng, labelStyleKey, clickEnabled ? (clickPlan as any) : null, onClick);
     if (labelLayer) bundle.label = labelLayer;
     return;
   }
@@ -1187,15 +1358,24 @@ function updateLayerBundle(
     if (style) bundle.main.setStyle(style);
   }
 
+  // 【新增】几何点击：线/面（更新时重绑）
+  (bundle.main as any).off?.('click');
+  if (geomPathEnabled && clickEnabled && onLabelClick) {
+    (bundle.main as any).on?.('click', (e: L.LeafletMouseEvent) => {
+      (e as any)?.originalEvent?.stopPropagation?.();
+      onLabelClick(r, clickPlan as any);
+    });
+  }
+
   // label refresh
   // - 若使用 declutter：不在这里动 label，交由 refresh() 的统一布局阶段处理
-  if (!symbol.label?.declutter) {
+  if (!(resolvedLabelPlan as any)?.declutter) {
     if (bundle.label) {
       if (root.hasLayer(bundle.label)) root.removeLayer(bundle.label);
       bundle.label = undefined;
       bundle.labelKey = undefined;
     }
-    const labelLayer = buildLabelLayer(r, symbol.label, ctx, store, projection);
+    const labelLayer = buildLabelLayer(r, resolvedLabelPlan, ctx, store, projection, undefined, labelStyleKey, clickEnabled ? (clickPlan as any) : null, onClick);
     if (labelLayer) bundle.label = labelLayer;
   }
 }
@@ -1208,6 +1388,7 @@ function buildLabelRequest(
   store: FeatureStore,
   projection: DynmapProjection,
   pointLatLng?: L.LatLng,
+  clickPlan?: LabelClickPlan | null,
 ): LabelRequest | null {
   if (!labelPlan || !labelPlan.enabled) return null;
   if (!labelPlan.declutter) return null;
@@ -1225,7 +1406,7 @@ function buildLabelRequest(
   if (r.type === 'Points') {
     const ll = pointLatLng ?? (r.p3 ? projection.locationToLatLng(r.p3.x, r.p3.y, r.p3.z) : null);
     if (!ll) return null;
-    const effectivePlacement = labelPlan.placement === 'center' ? 'near' : (labelPlan.placement ?? 'near');
+    const effectivePlacement = labelPlan.placement === 'center' ? ((clickPlan as any)?.mode === 'labelOnly' ? 'center' : 'near') : (labelPlan.placement ?? 'near');
     return {
       id: `${r.uid}#label`,
       featureUid: r.uid,
@@ -1312,6 +1493,9 @@ function buildLabelLayer(
   store: FeatureStore,
   projection: DynmapProjection,
   pointLatLng?: L.LatLng,
+  styleKey?: any,
+  clickPlan?: LabelClickPlan | null,
+  onClick?: (() => void) | null,
 ): L.Layer | null {
   if (!labelPlan || !labelPlan.enabled) return null;
 
@@ -1333,13 +1517,19 @@ function buildLabelLayer(
   if (r.type === 'Points') {
     const ll = pointLatLng ?? (r.p3 ? projection.locationToLatLng(r.p3.x, r.p3.y, r.p3.z) : null);
     if (!ll) return null;
-    return makeLabelMarker(
-  ll,
-  text,
-  placement === 'center' ? 'near' : placement,
-  withDot,
-  labelPlan.offsetY, 
-);
+    const effPlacement = placement === 'center' ? (((clickPlan as any)?.mode === 'labelOnly') ? 'center' : 'near') : placement;
+    if (clickPlan && (clickPlan as any).enabled && onClick) {
+      return makeClickableLabelMarker({
+        latlng: ll,
+        text,
+        placement: effPlacement,
+        withDot,
+        offsetY: labelPlan.offsetY,
+        styleKey: ((styleKey ?? (clickPlan as any).labelStyleKey ?? 'bubble-dark') as any),
+        onClick,
+      });
+    }
+    return makeLabelMarker(ll, text, effPlacement, withDot, labelPlan.offsetY, styleKey);
 
   }
 
@@ -1358,7 +1548,10 @@ function buildLabelLayer(
     if (total <= 1e-9) {
       const mid = r.coords3[Math.floor(r.coords3.length / 2)];
       const ll = projection.locationToLatLng(mid.x, Y_FOR_DISPLAY, mid.z);
-      return makeLabelMarker(ll, text, 'center', withDot);
+      if (clickPlan && (clickPlan as any).enabled && onClick) {
+          return makeClickableLabelMarker({ latlng: ll, text, placement: 'center', withDot, styleKey: ((styleKey ?? (clickPlan as any).labelStyleKey ?? 'bubble-dark') as any), onClick });
+        }
+        return makeLabelMarker(ll, text, 'center', withDot, undefined, styleKey);
     }
     const half = total / 2;
     let acc = 0;
@@ -1371,12 +1564,19 @@ function buildLabelLayer(
         const x = a.x + (b.x - a.x) * t;
         const z = a.z + (b.z - a.z) * t;
         const ll = projection.locationToLatLng(x, Y_FOR_DISPLAY, z);
-        return makeLabelMarker(ll, text, 'center', withDot);
+        if (clickPlan && (clickPlan as any).enabled && onClick) {
+          return makeClickableLabelMarker({ latlng: ll, text, placement: 'center', withDot, styleKey: ((styleKey ?? (clickPlan as any).labelStyleKey ?? 'bubble-dark') as any), onClick });
+        }
+        return makeLabelMarker(ll, text, 'center', withDot, undefined, styleKey);
       }
       acc += seg;
     }
     const last = r.coords3[r.coords3.length - 1];
-    return makeLabelMarker(projection.locationToLatLng(last.x, Y_FOR_DISPLAY, last.z), text, 'center', withDot);
+    const ll = projection.locationToLatLng(last.x, Y_FOR_DISPLAY, last.z);
+    if (clickPlan && (clickPlan as any).enabled && onClick) {
+      return makeClickableLabelMarker({ latlng: ll, text, placement: 'center', withDot, styleKey: ((styleKey ?? (clickPlan as any).labelStyleKey ?? 'bubble-dark') as any), onClick });
+    }
+    return makeLabelMarker(ll, text, 'center', withDot, undefined, styleKey);
   }
 
   // Polygon：几何中心 / bbox 中心兜底
@@ -1387,5 +1587,8 @@ function buildLabelLayer(
     z: (Math.min(...polyXZ.map(p => p.z)) + Math.max(...polyXZ.map(p => p.z))) / 2,
   };
   const ll = projection.locationToLatLng(c.x, Y_FOR_DISPLAY, c.z);
-  return makeLabelMarker(ll, text, placement, withDot);
+  if (clickPlan && (clickPlan as any).enabled && onClick) {
+    return makeClickableLabelMarker({ latlng: ll, text, placement, withDot, styleKey: ((styleKey ?? (clickPlan as any).labelStyleKey ?? 'bubble-dark') as any), onClick });
+  }
+  return makeLabelMarker(ll, text, placement, withDot, undefined, styleKey);
 }

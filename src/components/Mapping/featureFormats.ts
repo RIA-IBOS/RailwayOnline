@@ -1,3 +1,148 @@
+// ============================
+// Workflow Feature Catalog（工作流地物注册表）
+//
+// 背景：通用地物工作流依赖“地物点/线/面”三类通用要素，并通过 Kind / SKind / SKind2
+// 进行具体类型划分与后续显示差分。
+//
+// 目标：提供一个与 Feature 表组合类似、可维护的注册表，用于：
+// - 在工作流 UI 中驱动下拉选择（例如：NGF + LAD 下的全部 SKind2）
+// - 在后续功能中统一引用（导入校验、统计、渲染差分等）
+//
+// 说明：
+// - 注册表字段刻意保持扁平，避免在 UI/导入中引入复杂依赖。
+// - classCode/drawMode 在此处显式写入，避免依赖下方 FORMAT_REGISTRY 的声明顺序。
+// ============================
+
+export type WorkflowCatalogGeom = '点' | '线' | '面';
+
+export type WorkflowFeatureCatalogEntry = {
+  /** 对应现有 FeatureKey（地物点/线/面） */
+  classKey: '地物点' | '地物线' | '地物面' | '建筑' | '建筑楼层';
+  /** 对应 JSON Class（三字码） */
+  classCode: 'ISP' | 'ISL' | 'ISG' | 'BUD' | 'FLR';
+  /** 对应绘制模式 */
+  drawMode: 'point' | 'polyline' | 'polygon';
+
+  kind: string;
+  skind: string;
+  skind2: string;
+  name: string;
+  geom: WorkflowCatalogGeom;
+};
+
+/**
+ * 初次添加目录（来自：地物测绘要素第一次添加目录.xlsx）
+ * 约束：此处仅作为“注册与下拉驱动”；不对业务逻辑做强约束。
+ */
+export const WORKFLOW_FEATURE_CATALOG: WorkflowFeatureCatalogEntry[] = [
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'CON', name: '大陆', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'ISD', name: '岛屿', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'SBC', name: '次级大陆分区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'RGC', name: '三级大陆分区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'PEN', name: '半岛', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'IST', name: '地峡', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LIS', skind2: 'MTN', name: '山区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LIS', skind2: 'BSN', name: '盆地', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LIS', skind2: 'PLN', name: '平原', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'SEA', name: '海洋', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'LKE', name: '湖泊', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'STR', name: '海峡', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'EST', name: '河口', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'DBZ', skind2: 'L1', name: '一级行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'DBZ', skind2: 'L2', name: '二级行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'DBZ', skind2: 'L3', name: '三级行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'L1', name: '一级规划行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'L2', name: '二级规划行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'L3', name: '三级规划行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'UP', name: '未定规划区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'UC', name: '未定建设区', geom: '面' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'WTR', skind2: 'RVR', name: '河道', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'WTR', skind2: 'CAN', name: '运河', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'BOD', skind2: 'BDY', name: '特定自然地理边界线', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'BOD', skind2: 'STC', name: '海峡中线', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'ADM', skind: 'DBL', skind2: 'LBD', name: '行政区边界', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'ADM', skind: 'PLL', skind2: 'CBD', name: '规划区边界', geom: '线' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'NGF', skind: 'SCP', skind2: 'SPP', name: '特定自然要素点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'DBP', skind2: 'LIP', name: '特定地标点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'PLP', skind2: 'PLP', name: '规划点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'PLP', skind2: 'COP', name: '建设点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'DBP', skind2: 'SHR', name: '地标点', geom: '点' },
+  // ===== 建筑 / 建筑楼层（BUD/FLR）=====
+  { classKey: '建筑', classCode: 'BUD', drawMode: 'polygon', kind: 'NOM', skind: 'NOM', skind2: '', name: '默认', geom: '面' },
+  { classKey: '建筑', classCode: 'BUD', drawMode: 'polygon', kind: 'SPE', skind: 'SPE', skind2: '', name: '特殊', geom: '面' },
+  { classKey: '建筑楼层', classCode: 'FLR', drawMode: 'polygon', kind: 'NOM', skind: 'NOM', skind2: '', name: '默认', geom: '面' },
+  { classKey: '建筑楼层', classCode: 'FLR', drawMode: 'polygon', kind: 'SPE', skind: 'SPE', skind2: '', name: '特殊', geom: '面' },
+
+];
+
+/**
+ * 获取某一 Kind/SKind（可选 geom）下的 SKind2 候选项。
+ * - label: `${name}（${skind2}）`
+ */
+export function listCatalogSKind2Options(args: {
+  kind: string;
+  skind: string;
+  geom?: WorkflowCatalogGeom;
+}) {
+  const kind = String(args.kind ?? '').trim();
+  const skind = String(args.skind ?? '').trim();
+  const geom = args.geom;
+
+  return WORKFLOW_FEATURE_CATALOG
+    .filter((e) => e.kind === kind && e.skind === skind && (geom ? e.geom === geom : true))
+    .map((e) => ({
+      skind2: e.skind2,
+      name: e.name,
+      label: `${e.name}（${e.skind2}）`,
+      entry: e,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+}
+
+/**
+ * 获取某一 Kind（可选 geom）下的候选项（含 SKind 与 SKind2）。
+ * - label: `${name}（${skind}/${skind2}）`
+ * 用于“Kind 下所有点/线/面要素”的工作流选择。
+ */
+export function listCatalogKindOptions(args: { kind: string; geom?: WorkflowCatalogGeom }) {
+  const kind = String(args.kind ?? '').trim();
+  const geom = args.geom;
+
+  return WORKFLOW_FEATURE_CATALOG
+    .filter((e) => e.kind === kind && (geom ? e.geom === geom : true))
+    .map((e) => ({
+      skind: e.skind,
+      skind2: e.skind2,
+      name: e.name,
+      label: `${e.name}（${e.skind}/${e.skind2}）`,
+      entry: e,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+}
+
+
+/**
+ * 获取某一 Class（三字码，如 BUD/FLR）（可选 geom）下的候选项（含 Kind 与 SKind）。
+ * - label: `${name}（${kind}/${skind}）`
+ * 用于“按 Class（非地物点/线/面体系）”的工作流选择。
+ */
+export function listCatalogClassOptions(args: { classCode: string; geom?: WorkflowCatalogGeom }) {
+  const classCode = String(args.classCode ?? '').trim().toUpperCase();
+  const geom = args.geom;
+
+  return WORKFLOW_FEATURE_CATALOG
+    .filter((e) => String(e.classCode ?? '').toUpperCase() === classCode && (geom ? e.geom === geom : true))
+    .map((e) => ({
+      kind: e.kind,
+      skind: e.skind,
+      name: e.name,
+      label: `${e.name}（${e.kind}/${e.skind}）`,
+      entry: e,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+}
+
+
 // src/components/mapping/featureFormats.ts
 
 // ============================
@@ -32,41 +177,42 @@ export type ExtValueType =
   | typeof EXT_VALUE_TYPE_BOOL
   | typeof EXT_VALUE_TYPE_NULL;
 
+  export type DrawMode = 'point' | 'polyline' | 'polygon';
+export type BuildOp = 'create' | 'edit' | 'import';
 
-// ---------- 新规范：系统字段（自动填充） ----------
-const TYPE_NAME_BY_MODE: Record<DrawMode, 'Points' | 'Polyline' | 'Polygon'> = {
-  point: 'Points',
-  polyline: 'Polyline',
-  polygon: 'Polygon',
-};
+export type FeatureKey =
+  | '默认'
+  | '车站'
+  | '站台'
+  | '铁路'
+  | '站台轮廓'
+  | '车站建筑'
+  | '车站建筑点'
+  | '车站建筑楼层'
+  | '地物点'
+  | '地物线'
+  | '地物面'
+  | '建筑'
+  | '建筑楼层'
 
-// 索引表（来自你上传的“索引表.md”）
-// 若后续要扩展，仅在此处增补即可。
-const CLASS_CODE_BY_FEATURE: Partial<Record<FeatureKey, string>> = {
-  车站: 'STA',
-  站台: 'PLF',
-  铁路: 'RLE',
-  车站建筑: 'STB',
-  车站建筑楼层: 'STF',
-  站台轮廓:'PFB',
-  车站建筑点: 'SBP',
-  地物点: 'ISP',
-  地物线: 'ISL',
-  地物面: 'ISG',
-  建筑: 'BUD',
-  建筑楼层: 'FLR',
-};
 
-// World：按 MapContainer 的 currentWorld id 映射到新规范的整数
-const WORLD_CODE_BY_WORLD_ID: Record<string, number> = {
-  zth: 0,
-  naraku: 1,
-  houtu: 2,
-  eden: 3,
-  laputa: 4,
-  yunduan: 5,
-};
-
+export type ImportFormat =
+  | '点'
+  | '线'
+  | '面'
+  | '批量'
+  | '车站'
+  | '铁路'
+  | '站台'
+  | '站台轮廓'
+  | '车站建筑'
+  | '车站建筑点'
+  | '车站建筑楼层'
+  | '地物点'
+  | '地物线'
+  | '地物面'
+  | '建筑'
+  | '建筑楼层';
 
 export const EXT_VALUE_TYPE_OPTIONS: Array<{ label: string; value: ExtValueType }> = [
   { label: '文本', value: EXT_VALUE_TYPE_TEXT },
@@ -277,44 +423,6 @@ const flattenExtensionsToGroupItems = (ext: any): any[] => {
 };
 
 
-export type DrawMode = 'point' | 'polyline' | 'polygon';
-export type BuildOp = 'create' | 'edit' | 'import';
-
-export type FeatureKey =
-  | '默认'
-  | '车站'
-  | '站台'
-  | '铁路'
-  | '站台轮廓'
-  | '车站建筑'
-  | '车站建筑点'
-  | '车站建筑楼层'
-  | '地物点'
-  | '地物线'
-  | '地物面'
-  | '建筑'
-  | '建筑楼层'
-
-
-export type ImportFormat =
-  | '点'
-  | '线'
-  | '面'
-  | '批量'
-  | '车站'
-  | '铁路'
-  | '站台'
-  | '站台轮廓'
-  | '车站建筑'
-  | '车站建筑点'
-  | '车站建筑楼层'
-  | '地物点'
-  | '地物线'
-  | '地物面'
-  | '建筑'
-  | '建筑楼层';
-
-
 export type Coord2D = { x: number; z: number; y?: number };
 
 export type FieldType = 'text' | 'number' | 'select' | 'bool';
@@ -392,6 +500,106 @@ export type FormatDef = {
   validateImportItem?: (item: any) => string | undefined;
 };
 
+
+
+// ============================
+// Optional tags/extensions (Backwards compatible)
+// - Apply to all non-default formats so every feature type can optionally carry:
+//   - tags: lightweight primitives for filtering / render rules
+//   - extensions: arbitrary metadata (not used by rules)
+// - Implemented once and injected into every FormatDef to avoid duplication.
+// ============================
+
+const OPTIONAL_TAGS_GROUP_DEF: GroupDef = {
+  key: 'tags',
+  label: 'tags（可选：用于筛选/渲染差分）',
+  optional: true,
+  addButtonText: '添加 tag',
+  fields: [
+    { key: 'tagKey', label: '字段名', type: 'select', options: TAG_KEY_OPTIONS },
+    { key: 'tagKeyOther', label: '其他字段名（当字段名=其他时填写）', type: 'text', optional: true },
+    { key: 'tagValue', label: '值', type: 'text' },
+  ],
+};
+
+const OPTIONAL_EXTENSIONS_GROUP_DEF: GroupDef = {
+  key: 'extensions',
+  label: 'extensions（可选：仅记录信息，不参与规则）',
+  optional: true,
+  addButtonText: '添加扩展',
+  fields: [
+    { key: 'extGroup', label: '组/命名空间(extGroup)', type: 'text' },
+    { key: 'extKey', label: '字段名(extKey)', type: 'text' },
+    { key: 'extType', label: '值类型', type: 'select', options: EXT_VALUE_TYPE_OPTIONS, defaultValue: EXT_VALUE_TYPE_TEXT },
+    { key: 'extValue', label: '值(extValue)', type: 'text' },
+  ],
+};
+
+const ensureOptionalTagExtGroups = (groups?: GroupDef[]): GroupDef[] => {
+  const base = Array.isArray(groups) ? groups.slice() : [];
+  const keys = new Set(base.map((g) => g.key));
+  if (!keys.has('tags')) base.push(OPTIONAL_TAGS_GROUP_DEF);
+  if (!keys.has('extensions')) base.push(OPTIONAL_EXTENSIONS_GROUP_DEF);
+  return base;
+};
+
+const injectOptionalTagsExtensions = (out: any, groups: any) => {
+  if (!out || typeof out !== 'object') return out;
+  const tags = buildTagsFromGroupItems(groups?.tags);
+  const exts = buildExtensionsFromGroupItems(groups?.extensions);
+  if (out.tags === undefined && Object.keys(tags).length > 0) out.tags = tags;
+  if (out.extensions === undefined && Object.keys(exts).length > 0) out.extensions = exts;
+  return out;
+};
+
+const hydrateOptionalTagExtGroups = (featureInfo: any) => {
+  return {
+    tags: flattenTagsToGroupItems(featureInfo?.tags),
+    extensions: flattenExtensionsToGroupItems(featureInfo?.extensions),
+  } as Record<string, any[]>;
+};
+
+const validateOptionalTagExtSoft = (item: any): string | undefined => {
+  const terr = validateTagsObjectSoft(item?.tags);
+  if (terr) return terr;
+  const eerr = validateExtensionsObjectSoft(item?.extensions);
+  if (eerr) return eerr;
+  return;
+};
+
+// ---------- 新规范：系统字段（自动填充） ----------
+const TYPE_NAME_BY_MODE: Record<DrawMode, 'Points' | 'Polyline' | 'Polygon'> = {
+  point: 'Points',
+  polyline: 'Polyline',
+  polygon: 'Polygon',
+};
+
+// 索引表（来自你上传的“索引表.md”）
+// 若后续要扩展，仅在此处增补即可。
+const CLASS_CODE_BY_FEATURE: Partial<Record<FeatureKey, string>> = {
+  车站: 'STA',
+  站台: 'PLF',
+  铁路: 'RLE',
+  车站建筑: 'STB',
+  车站建筑楼层: 'STF',
+  站台轮廓:'PFB',
+  车站建筑点: 'SBP',
+  地物点: 'ISP',
+  地物线: 'ISL',
+  地物面: 'ISG',
+  建筑: 'BUD',
+  建筑楼层: 'FLR',
+};
+
+// World：按 MapContainer 的 currentWorld id 映射到新规范的整数
+const WORLD_CODE_BY_WORLD_ID: Record<string, number> = {
+  zth: 0,
+  naraku: 1,
+  houtu: 2,
+  eden: 3,
+  laputa: 4,
+  yunduan: 5,
+};
 
 const formatYYYYMMDD = (d: Date) => {
   const y = d.getFullYear();
@@ -1807,6 +2015,49 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
 },
 };
 
+
+
+// ---- Inject optional tags/extensions into every non-default FormatDef (single-source) ----
+// NOTE: Must run after FORMAT_REGISTRY is declared.
+const __OPTIONAL_TAG_EXT_ENRICHED__ = '__OPTIONAL_TAG_EXT_ENRICHED__';
+for (const def of Object.values(FORMAT_REGISTRY)) {
+  if (!def || def.key === '默认') continue;
+
+  // Prevent accidental double wrapping in dev HMR scenarios.
+  if ((def as any)[__OPTIONAL_TAG_EXT_ENRICHED__]) continue;
+  (def as any)[__OPTIONAL_TAG_EXT_ENRICHED__] = true;
+
+  def.groups = ensureOptionalTagExtGroups(def.groups);
+
+  const origBuild = def.buildFeatureInfo;
+  def.buildFeatureInfo = (args: any) => {
+    const out = origBuild(args);
+    return injectOptionalTagsExtensions(out, args?.groups);
+  };
+
+  const origHydrate = def.hydrate;
+  def.hydrate = (featureInfo: any) => {
+    const res = origHydrate(featureInfo);
+    const g = (res?.groups ?? {}) as Record<string, any[]>;
+    const opt = hydrateOptionalTagExtGroups(featureInfo);
+    return {
+      ...res,
+      groups: {
+        ...g,
+        ...(g.tags === undefined ? { tags: opt.tags } : {}),
+        ...(g.extensions === undefined ? { extensions: opt.extensions } : {}),
+      },
+    };
+  };
+
+  const origValidate = def.validateImportItem;
+  def.validateImportItem = (item: any) => {
+    const baseErr = origValidate?.(item);
+    if (baseErr) return baseErr;
+    return validateOptionalTagExtSoft(item);
+  };
+}
+
 export const getFormatDef = (key: FeatureKey): FormatDef => {
   // FeatureKey 理论上都在 FORMAT_REGISTRY 内，但这里做兜底更稳
   return (FORMAT_REGISTRY as any)[key] ?? FORMAT_REGISTRY['默认'];
@@ -1818,19 +2069,44 @@ export const getSubTypeOptions = (mode: DrawMode): FeatureKey[] => {
   return (Object.keys(FORMAT_REGISTRY) as FeatureKey[]).filter(k => FORMAT_REGISTRY[k].modes.includes(mode));
 };
 
-// 导出时坐标统一四舍五入到 0.5（不影响内存中编辑精度，仅影响输出）
-const round05 = (n: number) => {
+// 导出时坐标统一四舍五入到指定精度步进（不影响内存中编辑精度，仅影响输出）
+// NOTE: 0.1 是当前默认；如果未来需要更精细或更粗糙，请修改此常量。
+//       该精度用于“手动/导入/输出”链路，地图交互链路仍保留 0.5 网格化。
+const EXPORT_COORD_STEP = 0.1; // <-- 精度步进修改入口
+
+
+const fixNegZero = (n: number) => (Object.is(n, -0) ? 0 : n);
+
+const stepToDecimals = (step: number): number => {
+  if (!Number.isFinite(step) || step <= 0) return 0;
+  const s = String(step);
+  if (s.includes('e-')) {
+    const exp = Number(s.split('e-')[1]);
+    return Number.isFinite(exp) ? exp : 0;
+  }
+  const dot = s.indexOf('.');
+  if (dot < 0) return 0;
+  return Math.min(10, s.length - dot - 1);
+};
+
+
+const roundToStep = (n: number, step: number = EXPORT_COORD_STEP) => {
   if (!Number.isFinite(n)) return n;
-  const s = n < 0 ? -1 : 1;
-  const a = Math.abs(n);
-  return s * (Math.round((a + Number.EPSILON) * 2) / 2);
+  if (!Number.isFinite(step) || step <= 0) return n;
+
+  // Use toFixed to eliminate tails like -622.8000000000001
+  const q = (n + Number.EPSILON) / step;
+  const rq = Math.round(q);
+  const v = rq * step;
+  const dec = stepToDecimals(step);
+  return fixNegZero(Number(v.toFixed(dec)));
 };
 
 const roundXZDeep = (v: any): any => {
   if (Array.isArray(v)) {
     // 常见 [x,y,z]
     if (v.length === 3 && v.every((n) => typeof n === 'number')) {
-      return [round05(v[0]), v[1], round05(v[2])];
+      return [roundToStep(v[0]), v[1], roundToStep(v[2])];
     }
     return v.map(roundXZDeep);
   }
@@ -1839,8 +2115,8 @@ const roundXZDeep = (v: any): any => {
     // 常见 {x,z}
     if (typeof v.x === 'number' && typeof v.z === 'number') {
       const out: any = { ...v };
-      out.x = round05(v.x);
-      out.z = round05(v.z);
+      out.x = roundToStep(v.x);
+      out.z = roundToStep(v.z);
       return out;
     }
 

@@ -367,7 +367,7 @@
     "CreateBy": "639"
   },
   {
-    "staBuildingID": "ZRTSTB_BT",
+    "staBuildingID": "ZRTSTB_BT2",
     "staBuildingName": "白塔",
     "Conpoints": [
       [
@@ -490,7 +490,7 @@
   {
     "stationID": "ZRT3STA_5",
     "stationName": "白塔",
-    "STBuilding": "ZRTSTB_BT",
+    "STBuilding": "ZRTSTB_BT2",
     "coordinate": {
       "x": 5163.5,
       "z": 4385.5

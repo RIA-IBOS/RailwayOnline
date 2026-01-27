@@ -28,7 +28,7 @@ import { fetchPlayers } from '@/lib/playerApi';
 import { loadMapSettings, saveMapSettings, MapStyle } from '@/lib/cookies';
 import type { ParsedStation, ParsedLine, Coordinate, Player } from '@/types';
 import type { ParsedLandmark } from '@/lib/landmarkParser';
-import MeasuringModule from '@/components/Mapping/MeasuringModule';
+import MeasuringModule, { type MeasuringModuleHandle } from '@/components/Mapping/MeasuringModule';
 import MeasurementToolsModule from '@/components/Mapping/Mtools';
 
 import RuleDrivenLayer from '@/components/Rules/RuleDrivenLayer';
@@ -51,6 +51,7 @@ function MapContainer() {
   const leafletMapRef = useRef<L.Map | null>(null);
   const projectionRef = useRef<DynmapProjection | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const measuringModuleRef = useRef<MeasuringModuleHandle | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   // 从 cookie 读取初始设置
@@ -373,6 +374,14 @@ const handleRouteFound = useCallback((route: RouteHighlightData | Array<{ coord:
 
   // 世界切换处理
   const handleWorldChange = useCallback((worldId: string) => {
+    // 世界切换前默认触发“关闭测绘”。若用户不确认，则禁止切换。
+    // 注意：必须在 setCurrentWorld 之前执行，否则会导致临时挂载/图层归属混乱。
+    const ok = measuringModuleRef.current?.requestCloseAndClear?.('切换世界') ?? true;
+    if (!ok) return;
+
+    // 同步关闭“测量工具”（不需要二次确认）
+    setMeasureToolsCloseSignal(v => v + 1);
+
     setCurrentWorld(worldId);
 
     // 更新瓦片图层
@@ -924,6 +933,7 @@ map.on('mousemove', handleMouseMove);
             launcherSlot={(launcher) => <div className="hidden sm:block">{launcher}</div>}
           />
           <MeasuringModule
+            ref={measuringModuleRef}
             mapReady={mapReady}
             leafletMapRef={leafletMapRef}
             projectionRef={projectionRef}

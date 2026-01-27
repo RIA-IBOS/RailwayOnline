@@ -16,6 +16,7 @@ export const RULE_DATA_SOURCES: Record<string, WorldRuleDataSource> = {
   zth: {
     baseUrl: '/data/JSON',
     files: [
+    'GLLD.json',
     'EXchange_build.json',
     'ZRT13_01B.json',
     'ZRT13_01B_D.json',
@@ -64,6 +65,7 @@ export const RULE_DATA_SOURCES: Record<string, WorldRuleDataSource> = {
     'H7 A 海华北-会展中心 251231.json',
     'T3测试.json',
     //'T5测试.json'
+    '社营风南线_海华北至风满楼.json'
     ],
   },
 
