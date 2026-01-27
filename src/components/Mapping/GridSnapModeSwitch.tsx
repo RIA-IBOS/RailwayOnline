@@ -36,11 +36,33 @@ useEffect(() => {
   };
 }, []);
 
-
   return [mode, setGridSnapMode];
 };
 
 const fixNegZero = (n: number) => (Object.is(n, -0) ? 0 : n);
+
+export const stepToDecimals = (step: number): number => {
+  if (!Number.isFinite(step) || step <= 0) return 0;
+  // Infer decimals from string form (handles 0.1, 0.05, 0.5, 1, etc.)
+  const s = String(step);
+  if (s.includes('e-')) {
+    const exp = Number(s.split('e-')[1]);
+    return Number.isFinite(exp) ? exp : 0;
+  }
+  const dot = s.indexOf('.');
+  if (dot < 0) return 0;
+  return Math.min(10, s.length - dot - 1);
+};
+
+export const roundToStepStable = (n: number, step: number): number => {
+  if (!Number.isFinite(n)) return n;
+  if (!Number.isFinite(step) || step <= 0) return n;
+  const q = (n + Number.EPSILON) / step;
+  const rq = Math.round(q);
+  const v = rq * step;
+  const dec = stepToDecimals(step);
+  return fixNegZero(Number(v.toFixed(dec)));
+};
 
 export const snapNumberByMode = (n: number, mode: GridSnapMode): number => {
   if (!Number.isFinite(n)) return n;
@@ -81,6 +103,31 @@ export const parseHalfStepNumber = (raw: string): number | null => {
   const v = n * 2;
   if (Math.abs(v - Math.round(v)) > 1e-9) return null;
   return fixNegZero(Math.round(v) / 2);
+};
+
+/**
+ * Manual/import/export precision step (default 0.1).
+ * NOTE: This is intentionally separated from grid snap (0.5) logic.
+ * To change to a finer precision later, modify this constant.
+ */
+export const MANUAL_COORD_STEP = 0.1;
+
+/** parse & validate: only allow multiples of `step` (default 0.1); return null if invalid/empty */
+export const parseStepNumber = (raw: string, step: number = MANUAL_COORD_STEP): number | null => {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+
+  // To keep this robust and easy to tune later, we validate by checking whether
+  // n is an (approx) integer multiple of `step`.
+  // Assumption: `step` is typically 1/k (e.g., 0.1, 0.05, 0.01).
+  if (!Number.isFinite(step) || step <= 0) return null;
+
+  const q = n / step;
+  const rq = Math.round(q);
+  if (Math.abs(q - rq) > 1e-9) return null;
+  return roundToStepStable(n, step);
 };
 
 export default function GridSnapModeSwitch() {

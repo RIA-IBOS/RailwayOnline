@@ -101,6 +101,7 @@ export function DraggablePanel({
     handleMouseDown(e);
   }, [handlePanelClick, handleMouseDown]);
 
+
   // 手机端：不渲染（手机端内容在 MapContainer 的 sm:hidden 区域单独渲染）
   if (!isDesktop) {
     return null;

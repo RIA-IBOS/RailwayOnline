@@ -1,7 +1,183 @@
+// ============================
+// Workflow Feature Catalog（工作流地物注册表）
+//
+// 背景：通用地物工作流依赖“地物点/线/面”三类通用要素，并通过 Kind / SKind / SKind2
+// 进行具体类型划分与后续显示差分。
+//
+// 目标：提供一个与 Feature 表组合类似、可维护的注册表，用于：
+// - 在工作流 UI 中驱动下拉选择（例如：NGF + LAD 下的全部 SKind2）
+// - 在后续功能中统一引用（导入校验、统计、渲染差分等）
+//
+// 说明：
+// - 注册表字段刻意保持扁平，避免在 UI/导入中引入复杂依赖。
+// - classCode/drawMode 在此处显式写入，避免依赖下方 FORMAT_REGISTRY 的声明顺序。
+// ============================
+
+export type WorkflowCatalogGeom = '点' | '线' | '面';
+
+export type WorkflowFeatureCatalogEntry = {
+  /** 对应现有 FeatureKey（地物点/线/面） */
+  classKey: '地物点' | '地物线' | '地物面' | '建筑' | '建筑楼层';
+  /** 对应 JSON Class（三字码） */
+  classCode: 'ISP' | 'ISL' | 'ISG' | 'BUD' | 'FLR';
+  /** 对应绘制模式 */
+  drawMode: 'point' | 'polyline' | 'polygon';
+
+  kind: string;
+  skind: string;
+  skind2: string;
+  name: string;
+  geom: WorkflowCatalogGeom;
+};
+
+/**
+ * 初次添加目录（来自：地物测绘要素第一次添加目录.xlsx）
+ * 约束：此处仅作为“注册与下拉驱动”；不对业务逻辑做强约束。
+ */
+export const WORKFLOW_FEATURE_CATALOG: WorkflowFeatureCatalogEntry[] = [
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'CON', name: '大陆', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'ISD', name: '岛屿', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'SBC', name: '次级大陆分区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'RGC', name: '三级大陆分区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'PEN', name: '半岛', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LAD', skind2: 'IST', name: '地峡', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LIS', skind2: 'MTN', name: '山区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LIS', skind2: 'BSN', name: '盆地', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'LIS', skind2: 'PLN', name: '平原', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'SEA', name: '海洋', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'LKE', name: '湖泊', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'STR', name: '海峡', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'NGF', skind: 'WTB', skind2: 'EST', name: '河口', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'DBZ', skind2: 'L1', name: '一级行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'DBZ', skind2: 'L2', name: '二级行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'DBZ', skind2: 'L3', name: '三级行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'L1', name: '一级规划行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'L2', name: '二级规划行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'L3', name: '三级规划行政区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'UP', name: '未定规划区', geom: '面' },
+  { classKey: '地物面', classCode: 'ISG', drawMode: 'polygon', kind: 'ADM', skind: 'PLZ', skind2: 'UC', name: '未定建设区', geom: '面' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'WTR', skind2: 'RVR', name: '河道', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'WTR', skind2: 'CAN', name: '运河', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'BOD', skind2: 'BDY', name: '特定自然地理边界线', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'NGF', skind: 'BOD', skind2: 'STC', name: '海峡中线', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'ADM', skind: 'DBL', skind2: 'LBD', name: '行政区边界', geom: '线' },
+  { classKey: '地物线', classCode: 'ISL', drawMode: 'polyline', kind: 'ADM', skind: 'PLL', skind2: 'CBD', name: '规划区边界', geom: '线' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'NGF', skind: 'SCP', skind2: 'SPP', name: '特定自然要素点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'DBP', skind2: 'LIP', name: '特定地标点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'PLP', skind2: 'PLP', name: '规划点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'PLP', skind2: 'COP', name: '建设点', geom: '点' },
+  { classKey: '地物点', classCode: 'ISP', drawMode: 'point', kind: 'ADM', skind: 'DBP', skind2: 'SHR', name: '地标点', geom: '点' },
+  // ===== 建筑 / 建筑楼层（BUD/FLR）=====
+  { classKey: '建筑', classCode: 'BUD', drawMode: 'polygon', kind: 'NOM', skind: 'NOM', skind2: '', name: '默认', geom: '面' },
+  { classKey: '建筑', classCode: 'BUD', drawMode: 'polygon', kind: 'SPE', skind: 'SPE', skind2: '', name: '特殊', geom: '面' },
+  { classKey: '建筑楼层', classCode: 'FLR', drawMode: 'polygon', kind: 'NOM', skind: 'NOM', skind2: '', name: '默认', geom: '面' },
+  { classKey: '建筑楼层', classCode: 'FLR', drawMode: 'polygon', kind: 'SPE', skind: 'SPE', skind2: '', name: '特殊', geom: '面' },
+
+];
+
+/**
+ * 获取某一 Kind/SKind（可选 geom）下的 SKind2 候选项。
+ * - label: `${name}（${skind2}）`
+ */
+export function listCatalogSKind2Options(args: {
+  kind: string;
+  skind: string;
+  geom?: WorkflowCatalogGeom;
+}) {
+  const kind = String(args.kind ?? '').trim();
+  const skind = String(args.skind ?? '').trim();
+  const geom = args.geom;
+
+  return WORKFLOW_FEATURE_CATALOG
+    .filter((e) => e.kind === kind && e.skind === skind && (geom ? e.geom === geom : true))
+    .map((e) => ({
+      skind2: e.skind2,
+      name: e.name,
+      label: `${e.name}（${e.skind2}）`,
+      entry: e,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+}
+
+/**
+ * 获取某一 Kind（可选 geom）下的候选项（含 SKind 与 SKind2）。
+ * - label: `${name}（${skind}/${skind2}）`
+ * 用于“Kind 下所有点/线/面要素”的工作流选择。
+ */
+export function listCatalogKindOptions(args: { kind: string; geom?: WorkflowCatalogGeom }) {
+  const kind = String(args.kind ?? '').trim();
+  const geom = args.geom;
+
+  return WORKFLOW_FEATURE_CATALOG
+    .filter((e) => e.kind === kind && (geom ? e.geom === geom : true))
+    .map((e) => ({
+      skind: e.skind,
+      skind2: e.skind2,
+      name: e.name,
+      label: `${e.name}（${e.skind}/${e.skind2}）`,
+      entry: e,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+}
+
+
+/**
+ * 获取某一 Class（三字码，如 BUD/FLR）（可选 geom）下的候选项（含 Kind 与 SKind）。
+ * - label: `${name}（${kind}/${skind}）`
+ * 用于“按 Class（非地物点/线/面体系）”的工作流选择。
+ */
+export function listCatalogClassOptions(args: { classCode: string; geom?: WorkflowCatalogGeom }) {
+  const classCode = String(args.classCode ?? '').trim().toUpperCase();
+  const geom = args.geom;
+
+  return WORKFLOW_FEATURE_CATALOG
+    .filter((e) => String(e.classCode ?? '').toUpperCase() === classCode && (geom ? e.geom === geom : true))
+    .map((e) => ({
+      kind: e.kind,
+      skind: e.skind,
+      name: e.name,
+      label: `${e.name}（${e.kind}/${e.skind}）`,
+      entry: e,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+}
+
+
 // src/components/mapping/featureFormats.ts
 
+// ============================
+// Tag Registry（软词典）
+// - tags：轻量筛选/渲染差分（支持规则显式路径：tags.xxx）
+// - extensions：仅记录信息（不参与规则/渲染差分）
+//
+// 设计约束（为大众贡献与维护简化）：
+// 1) tags 的 value 仅允许 primitive（string/number/bool/null），避免深层结构带来导入与渲染复杂度。
+// 2) registry 仅用于“推荐键/类型提示/导入轻校验”；未登记的键允许存在（通过 UI 的“其他”录入）。
+// ============================
 
-export type DrawMode = 'point' | 'polyline' | 'polygon';
+export type TagPrimitive = string | number | boolean | null;
+
+export type TagRegistryEntry = {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'bool' | 'select';
+  options?: Array<{ label: string; value: string }>;
+};
+
+export const TAG_KEY_OTHER = '__other__';
+
+export const EXT_VALUE_TYPE_TEXT = 'text' as const;
+export const EXT_VALUE_TYPE_NUMBER = 'number' as const;
+export const EXT_VALUE_TYPE_BOOL = 'bool' as const;
+export const EXT_VALUE_TYPE_NULL = 'null' as const;
+
+export type ExtValueType =
+  | typeof EXT_VALUE_TYPE_TEXT
+  | typeof EXT_VALUE_TYPE_NUMBER
+  | typeof EXT_VALUE_TYPE_BOOL
+  | typeof EXT_VALUE_TYPE_NULL;
+
+  export type DrawMode = 'point' | 'polyline' | 'polygon';
 export type BuildOp = 'create' | 'edit' | 'import';
 
 export type FeatureKey =
@@ -18,12 +194,7 @@ export type FeatureKey =
   | '地物面'
   | '建筑'
   | '建筑楼层'
-  // 下面这些是旧/占位 subtype（保留可选项，但不参与新 JSON 规范的必填校验）
-  | '地标'
-  | '栈道'
-  | '航道'
-  | '一般建筑'
-  | '车站站体';
+
 
 export type ImportFormat =
   | '点'
@@ -36,12 +207,220 @@ export type ImportFormat =
   | '站台轮廓'
   | '车站建筑'
   | '车站建筑点'
-    | '车站建筑楼层'
+  | '车站建筑楼层'
   | '地物点'
   | '地物线'
   | '地物面'
   | '建筑'
   | '建筑楼层';
+
+export const EXT_VALUE_TYPE_OPTIONS: Array<{ label: string; value: ExtValueType }> = [
+  { label: '文本', value: EXT_VALUE_TYPE_TEXT },
+  { label: '数字', value: EXT_VALUE_TYPE_NUMBER },
+  { label: '布尔', value: EXT_VALUE_TYPE_BOOL },
+  { label: '空(null)', value: EXT_VALUE_TYPE_NULL },
+];
+
+// ✅ 你可以在此处集中维护 tags 软词典（放在文件顶部便于修改）
+// 说明：
+// - key：tags 中的字段名
+// - type：用于 UI 提示与导入轻校验（不会强制阻止未知 key）
+// - options：仅当 type='select' 时使用
+export const TAG_REGISTRY: Record<string, TagRegistryEntry> = {
+  // 通用
+  category: { key: 'category', label: '分类(category)', type: 'text' },
+  level: { key: 'level', label: '等级(level)', type: 'number' },
+  status: { key: 'status', label: '状态(status)', type: 'text' },
+  source: { key: 'source', label: '来源(source)', type: 'text' },
+};
+
+export const TAG_KEY_OPTIONS: Array<{ label: string; value: string }> = (() => {
+  const opts = Object.values(TAG_REGISTRY)
+    .map((e) => ({ label: e.label, value: e.key }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+  opts.push({ label: '其他（自定义）', value: TAG_KEY_OTHER });
+  return opts;
+})();
+
+const isTagPrimitive = (v: any): v is TagPrimitive => {
+  return v === null || ['string', 'number', 'boolean'].includes(typeof v);
+};
+
+const coerceTagPrimitive = (key: string, raw: any): TagPrimitive | undefined => {
+  if (raw === undefined) return undefined;
+
+  // null 允许
+  if (raw === null) return null;
+
+  const def = TAG_REGISTRY[key];
+  const t = def?.type;
+
+  if (t === 'number') {
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+    const n = Number(String(raw).trim());
+    return Number.isFinite(n) ? n : String(raw);
+  }
+
+  if (t === 'bool') {
+    if (typeof raw === 'boolean') return raw;
+    const s = String(raw).trim().toLowerCase();
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+    return String(raw);
+  }
+
+  // text/select：统一存 string（保持可读性）
+  if (typeof raw === 'string') return raw;
+  return String(raw);
+};
+
+const validateTagsObjectSoft = (tags: any): string | null => {
+  if (tags === undefined || tags === null) return null;
+  if (!tags || typeof tags !== 'object' || Array.isArray(tags)) return 'tags 必须是对象';
+
+  for (const [k, v] of Object.entries(tags)) {
+    // 未登记键允许存在，但 value 必须是 primitive（避免嵌套结构）
+    if (!isTagPrimitive(v)) return `tags.${k} 必须是 string/number/bool/null`;
+
+    const def = TAG_REGISTRY[k];
+    if (!def) continue;
+
+    // 轻校验：类型不匹配时不直接阻断（仍返回错误信息以提示维护者）
+    if (def.type === 'number' && typeof v !== 'number') {
+      const n = Number(String(v).trim());
+      if (!Number.isFinite(n)) return `tags.${k} 期望 number`;
+    }
+    if (def.type === 'bool' && typeof v !== 'boolean') {
+      const s = String(v).trim().toLowerCase();
+      if (s !== 'true' && s !== 'false') return `tags.${k} 期望 bool`;
+    }
+    if (def.type === 'select' && typeof v !== 'string') {
+      return `tags.${k} 期望 string`;
+    }
+  }
+  return null;
+};
+
+
+const validateExtensionsObjectSoft = (ext: any): string | null => {
+  if (ext === undefined || ext === null) return null;
+  if (!ext || typeof ext !== 'object' || Array.isArray(ext)) return 'extensions 必须是对象';
+
+  // 允许两层：extensions.<group>.<key> = primitive
+  for (const [g, v] of Object.entries(ext)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return `extensions.${g} 必须是对象`; 
+    for (const [k, vv] of Object.entries(v as any)) {
+      // 为了保持导入简单：仅允许 primitive（不做深层嵌套）
+      if (!isTagPrimitive(vv)) return `extensions.${g}.${k} 必须是 string/number/bool/null`;
+    }
+  }
+  return null;
+};
+
+const buildTagsFromGroupItems = (items: any[]): Record<string, TagPrimitive> => {
+  const out: Record<string, TagPrimitive> = {};
+  for (const it of items ?? []) {
+    const keyRaw = String(it?.tagKey ?? '').trim();
+    const key = keyRaw === TAG_KEY_OTHER ? String(it?.tagKeyOther ?? '').trim() : keyRaw;
+    if (!key) continue;
+
+    const rawVal = it?.tagValue;
+    const sval = String(rawVal ?? '').trim();
+    if (!sval && rawVal !== 0 && rawVal !== false) continue;
+
+    const coerced = coerceTagPrimitive(key, rawVal);
+    if (coerced === undefined) continue;
+    out[key] = coerced;
+  }
+  return out;
+};
+
+const flattenTagsToGroupItems = (tags: any): any[] => {
+  if (!tags || typeof tags !== 'object' || Array.isArray(tags)) return [];
+  const out: any[] = [];
+  for (const [k, v] of Object.entries(tags)) {
+    if (!isTagPrimitive(v)) continue;
+    // 若 tags key 不在 registry 中，为了让 UI 回显清晰：
+    // - 字段名选择“其他”
+    // - 其他字段名填写真实 key
+    const known = Boolean(TAG_REGISTRY[k]);
+    out.push({
+      tagKey: known ? k : TAG_KEY_OTHER,
+      tagKeyOther: known ? '' : k,
+      tagValue: v === null ? 'null' : String(v),
+    });
+  }
+  return out;
+};
+
+const buildExtensionsFromGroupItems = (items: any[]): Record<string, Record<string, TagPrimitive>> => {
+  const out: Record<string, Record<string, TagPrimitive>> = {};
+  for (const it of items ?? []) {
+    const g = String(it?.extGroup ?? '').trim();
+    const k = String(it?.extKey ?? '').trim();
+    const t = (it?.extType ?? EXT_VALUE_TYPE_TEXT) as ExtValueType;
+    const rawVal = it?.extValue;
+
+    if (!g || !k) continue;
+
+    // null 类型不要求填写值
+    if (t === EXT_VALUE_TYPE_NULL) {
+      (out[g] ??= {})[k] = null;
+      continue;
+    }
+
+    const sval = String(rawVal ?? '').trim();
+    if (!sval && rawVal !== 0 && rawVal !== false) continue;
+
+    let coerced: TagPrimitive | undefined;
+    if (t === EXT_VALUE_TYPE_NUMBER) {
+      if (typeof rawVal === 'number' && Number.isFinite(rawVal)) coerced = rawVal;
+      else {
+        const n = Number(String(rawVal).trim());
+        coerced = Number.isFinite(n) ? n : String(rawVal);
+      }
+    } else if (t === EXT_VALUE_TYPE_BOOL) {
+      if (typeof rawVal === 'boolean') coerced = rawVal;
+      else {
+        const s = String(rawVal).trim().toLowerCase();
+        if (s === 'true') coerced = true;
+        else if (s === 'false') coerced = false;
+        else coerced = String(rawVal);
+      }
+    } else {
+      // text
+      coerced = typeof rawVal === 'string' ? rawVal : String(rawVal);
+    }
+
+    if (coerced === undefined) continue;
+    (out[g] ??= {})[k] = coerced;
+  }
+  return out;
+};
+
+const flattenExtensionsToGroupItems = (ext: any): any[] => {
+  if (!ext || typeof ext !== 'object' || Array.isArray(ext)) return [];
+  const out: any[] = [];
+  for (const [g, v] of Object.entries(ext)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    for (const [k, vv] of Object.entries(v as any)) {
+      if (!isTagPrimitive(vv)) continue;
+      const extType: ExtValueType =
+        vv === null ? EXT_VALUE_TYPE_NULL
+        : typeof vv === 'number' ? EXT_VALUE_TYPE_NUMBER
+        : typeof vv === 'boolean' ? EXT_VALUE_TYPE_BOOL
+        : EXT_VALUE_TYPE_TEXT;
+      out.push({
+        extGroup: g,
+        extKey: k,
+        extType,
+        // null 类型下，value 输入框可留空
+        extValue: vv === null ? '' : String(vv),
+      });
+    }
+  }
+  return out;
+};
 
 
 export type Coord2D = { x: number; z: number; y?: number };
@@ -119,6 +498,73 @@ export type FormatDef = {
 
   // 导入 JSON 时：校验 item，返回错误信息（undefined=通过）
   validateImportItem?: (item: any) => string | undefined;
+};
+
+
+
+// ============================
+// Optional tags/extensions (Backwards compatible)
+// - Apply to all non-default formats so every feature type can optionally carry:
+//   - tags: lightweight primitives for filtering / render rules
+//   - extensions: arbitrary metadata (not used by rules)
+// - Implemented once and injected into every FormatDef to avoid duplication.
+// ============================
+
+const OPTIONAL_TAGS_GROUP_DEF: GroupDef = {
+  key: 'tags',
+  label: 'tags（可选：用于筛选/渲染差分）',
+  optional: true,
+  addButtonText: '添加 tag',
+  fields: [
+    { key: 'tagKey', label: '字段名', type: 'select', options: TAG_KEY_OPTIONS },
+    { key: 'tagKeyOther', label: '其他字段名（当字段名=其他时填写）', type: 'text', optional: true },
+    { key: 'tagValue', label: '值', type: 'text' },
+  ],
+};
+
+const OPTIONAL_EXTENSIONS_GROUP_DEF: GroupDef = {
+  key: 'extensions',
+  label: 'extensions（可选：仅记录信息，不参与规则）',
+  optional: true,
+  addButtonText: '添加扩展',
+  fields: [
+    { key: 'extGroup', label: '组/命名空间(extGroup)', type: 'text' },
+    { key: 'extKey', label: '字段名(extKey)', type: 'text' },
+    { key: 'extType', label: '值类型', type: 'select', options: EXT_VALUE_TYPE_OPTIONS, defaultValue: EXT_VALUE_TYPE_TEXT },
+    { key: 'extValue', label: '值(extValue)', type: 'text' },
+  ],
+};
+
+const ensureOptionalTagExtGroups = (groups?: GroupDef[]): GroupDef[] => {
+  const base = Array.isArray(groups) ? groups.slice() : [];
+  const keys = new Set(base.map((g) => g.key));
+  if (!keys.has('tags')) base.push(OPTIONAL_TAGS_GROUP_DEF);
+  if (!keys.has('extensions')) base.push(OPTIONAL_EXTENSIONS_GROUP_DEF);
+  return base;
+};
+
+const injectOptionalTagsExtensions = (out: any, groups: any) => {
+  if (!out || typeof out !== 'object') return out;
+  const tags = buildTagsFromGroupItems(groups?.tags);
+  const exts = buildExtensionsFromGroupItems(groups?.extensions);
+  if (out.tags === undefined && Object.keys(tags).length > 0) out.tags = tags;
+  if (out.extensions === undefined && Object.keys(exts).length > 0) out.extensions = exts;
+  return out;
+};
+
+const hydrateOptionalTagExtGroups = (featureInfo: any) => {
+  return {
+    tags: flattenTagsToGroupItems(featureInfo?.tags),
+    extensions: flattenExtensionsToGroupItems(featureInfo?.extensions),
+  } as Record<string, any[]>;
+};
+
+const validateOptionalTagExtSoft = (item: any): string | undefined => {
+  const terr = validateTagsObjectSoft(item?.tags);
+  if (terr) return terr;
+  const eerr = validateExtensionsObjectSoft(item?.extensions);
+  if (eerr) return eerr;
+  return;
 };
 
 // ---------- 新规范：系统字段（自动填充） ----------
@@ -279,6 +725,12 @@ export const validateRequiredOnSave = (
       for (const f of g.fields ?? []) {
         if (isEmptyRequired(f, it?.[f.key])) return false;
       }
+
+      // tags：当字段名选择“其他”时，要求填写 tagKeyOther（仅当该 group 具备对应字段时生效）
+      if (g.key === 'tags' && it?.tagKey === TAG_KEY_OTHER) {
+        const other = String(it?.tagKeyOther ?? '').trim();
+        if (!other) return false;
+      }
     }
   }
 
@@ -338,6 +790,21 @@ export const validateRequiredDetailed = (
             index: idx,
             key: f.key,
             label: f.label,
+          });
+        }
+      }
+
+      // tags：当字段名选择“其他”时，要求填写 tagKeyOther（仅当该 group 具备对应字段时生效）
+      if (g.key === 'tags' && it?.tagKey === TAG_KEY_OTHER) {
+        const other = String(it?.tagKeyOther ?? '').trim();
+        if (!other) {
+          missing.push({
+            kind: 'groupItemField',
+            groupKey: g.key,
+            groupLabel: g.label,
+            index: idx,
+            key: 'tagKeyOther',
+            label: '其他字段名(tagKeyOther)',
           });
         }
       }
@@ -885,15 +1352,6 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
           { key: 'Group', label: '分组(Group)', type: 'text', optional: true },
         ],
       },
-
-      {
-        key: 'Stations',
-        label: '包含车站 Stations',
-        addButtonText: '添加车站条目',
-        fields: [
-          { key: 'ID', label: '车站ID', type: 'text' }, 
-        ],
-      },
     ],
     buildFeatureInfo: ({ op, mode, coords, values, groups, worldId, editorId, prevFeatureInfo, now }) => {
       const base = pickByFields(values, FORMAT_REGISTRY['车站建筑'].fields);
@@ -910,11 +1368,8 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
           })
         : [];
 
-      const Stations = Array.isArray(groups.Stations)
-        ? groups.Stations.map((it: any) => ({ ID: it?.ID ?? '' }))
-        : [];
-
-      const out = { ...base, Conpoints, Floors, Stations };
+      // 注意：STB 不再包含 Stations 分组（STA -> STB 的归属已改为 STA.STBuilding 单向指向）
+      const out = { ...base, Conpoints, Floors };
       return withSystemFields(FORMAT_REGISTRY['车站建筑'], out, { op, mode, worldId, editorId, prevFeatureInfo, now });
     },
     hydrate: (featureInfo) => ({
@@ -930,10 +1385,6 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
               ID: f?.ID ?? '',
               Group: f?.Group ?? '',
             }))
-          : [],
-
-        Stations: Array.isArray(featureInfo?.Stations)
-          ? featureInfo.Stations.map((s: any) => ({ ID: s?.ID ?? '' }))
           : [],
       },
     }),
@@ -1159,31 +1610,73 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
   fields: [
     { key: 'PointID', label: '要素点ID(PointID)', type: 'text' },
     { key: 'PointName', label: '要素点名(PointName)', type: 'text' },
+
+    // 仍保留为“硬字段”（便于大众贡献者理解）；同时会自动镜像到 tags 中，供 rules 使用
     { key: 'PointKind', label: '要素类型(PointKind)', type: 'text' },
     { key: 'PointSKind', label: '要素子类型(PointSKind)', type: 'text' },
+    { key: 'PointSKind2', label: '要素三级子类型(PointSKind2)', type: 'text', optional: true },
+
     { key: 'Situation', label: '状态(Situation)', type: 'text', optional: true },
     { key: 'elevation', label: '高度(y)', type: 'number', optional: true },
   ],
-  groups: [],
-  buildFeatureInfo: ({ op, mode, coords, values, worldId, editorId, prevFeatureInfo, now }) => {
+  groups: [
+    {
+      key: 'tags',
+      label: 'tags（可选：用于筛选/渲染差分）',
+      optional: true,
+      addButtonText: '添加 tag',
+      fields: [
+        { key: 'tagKey', label: '字段名', type: 'select', options: TAG_KEY_OPTIONS },
+        { key: 'tagKeyOther', label: '其他字段名（当字段名=其他时填写）', type: 'text', optional: true },
+        { key: 'tagValue', label: '值', type: 'text' },
+      ],
+    },
+    {
+      key: 'extensions',
+      label: 'extensions（可选：仅记录信息，不参与规则）',
+      optional: true,
+      addButtonText: '添加扩展',
+      fields: [
+        { key: 'extGroup', label: '组/命名空间(extGroup)', type: 'text' },
+        { key: 'extKey', label: '字段名(extKey)', type: 'text' },
+        { key: 'extType', label: '值类型', type: 'select', options: EXT_VALUE_TYPE_OPTIONS, defaultValue: EXT_VALUE_TYPE_TEXT },
+        { key: 'extValue', label: '值(extValue)', type: 'text' },
+      ],
+    },
+  ],
+  buildFeatureInfo: ({ op, mode, coords, values, groups, worldId, editorId, prevFeatureInfo, now }) => {
     const base = pickByFields(values, FORMAT_REGISTRY['地物点'].fields);
     const p0 = coords[0];
-    const out = {
+
+    // tags 仅记录“用户显式添加”的轻量字段；不自动把主干字段镜像到 tags
+    // （避免出现用户删 registry 后仍被强行写入 tags 的情况，且保持导入/编辑语义清晰）
+    const tags = buildTagsFromGroupItems(groups?.tags);
+
+    const extensions = buildExtensionsFromGroupItems(groups?.extensions);
+
+    const out: any = {
       ...base,
       coordinate: { x: p0?.x ?? 0, z: p0?.z ?? 0 },
     };
+    if (Object.keys(tags).length > 0) out.tags = tags;
+    if (Object.keys(extensions).length > 0) out.extensions = extensions;
+
     return withSystemFields(FORMAT_REGISTRY['地物点'], out, { op, mode, worldId, editorId, prevFeatureInfo, now });
   },
   hydrate: (featureInfo) => ({
     values: {
       PointID: featureInfo?.PointID ?? '',
       PointName: featureInfo?.PointName ?? '',
-      PointKind: featureInfo?.PointKind ?? '',
-      PointSKind: featureInfo?.PointSKind ?? '',
-      Situation: featureInfo?.Situation ?? '',
+      PointKind: featureInfo?.PointKind ?? featureInfo?.tags?.PointKind ?? '',
+      PointSKind: featureInfo?.PointSKind ?? featureInfo?.tags?.PointSKind ?? '',
+      PointSKind2: featureInfo?.PointSKind2 ?? featureInfo?.tags?.PointSKind2 ?? '',
+      Situation: featureInfo?.Situation ?? featureInfo?.tags?.Situation ?? '',
       elevation: featureInfo?.elevation ?? '',
     },
-    groups: {},
+    groups: {
+      tags: flattenTagsToGroupItems(featureInfo?.tags),
+      extensions: flattenExtensionsToGroupItems(featureInfo?.extensions),
+    },
   }),
   coordsFromFeatureInfo: (featureInfo) => {
     const c = featureInfo?.coordinate;
@@ -1194,9 +1687,14 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
     if (!item || typeof item !== 'object') return '不是对象';
     if (!String((item as any).PointID ?? '').trim()) return '缺少 PointID';
     if (!String((item as any).PointName ?? '').trim()) return '缺少 PointName';
-    if (!String((item as any).PointKind ?? '').trim()) return '缺少 PointKind';
-    if (!String((item as any).PointSKind ?? '').trim()) return '缺少 PointSKind';
+    if (!String((item as any).PointKind ?? '').trim() && !String((item as any)?.tags?.PointKind ?? '').trim()) return '缺少 PointKind（或 tags.PointKind）';
+    if (!String((item as any).PointSKind ?? '').trim() && !String((item as any)?.tags?.PointSKind ?? '').trim()) return '缺少 PointSKind（或 tags.PointSKind）';
     if (!item.coordinate || !isFiniteNum((item as any).coordinate.x) || !isFiniteNum((item as any).coordinate.z)) return '缺少合法 coordinate.x / coordinate.z';
+
+    const terr = validateTagsObjectSoft((item as any).tags);
+    if (terr) return terr;
+    const eerr = validateExtensionsObjectSoft((item as any).extensions);
+    if (eerr) return eerr;
     return;
   },
 },
@@ -1210,26 +1708,65 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
   fields: [
     { key: 'PLineID', label: '线要素ID(PLineID)', type: 'text' },
     { key: 'PLineName', label: '线要素名(PLineName)', type: 'text' },
+
     { key: 'PLineKind', label: '线要素类型(PLineKind)', type: 'text' },
     { key: 'PLineSKind', label: '线要素子类型(PLineSKind)', type: 'text' },
+    { key: 'PLineSKind2', label: '线要素三级子类型(PLineSKind2)', type: 'text', optional: true },
+
     { key: 'Situation', label: '状态(Situation)', type: 'text', optional: true },
   ],
-  groups: [],
-  buildFeatureInfo: ({ op, mode, coords, values, worldId, editorId, prevFeatureInfo, now }) => {
+  groups: [
+    {
+      key: 'tags',
+      label: 'tags（可选：用于筛选/渲染差分）',
+      optional: true,
+      addButtonText: '添加 tag',
+      fields: [
+        { key: 'tagKey', label: '字段名', type: 'select', options: TAG_KEY_OPTIONS },
+        { key: 'tagKeyOther', label: '其他字段名（当字段名=其他时填写）', type: 'text', optional: true },
+        { key: 'tagValue', label: '值', type: 'text' },
+      ],
+    },
+    {
+      key: 'extensions',
+      label: 'extensions（可选：仅记录信息，不参与规则）',
+      optional: true,
+      addButtonText: '添加扩展',
+      fields: [
+        { key: 'extGroup', label: '组/命名空间(extGroup)', type: 'text' },
+        { key: 'extKey', label: '字段名(extKey)', type: 'text' },
+        { key: 'extType', label: '值类型', type: 'select', options: EXT_VALUE_TYPE_OPTIONS, defaultValue: EXT_VALUE_TYPE_TEXT },
+        { key: 'extValue', label: '值(extValue)', type: 'text' },
+      ],
+    },
+  ],
+  buildFeatureInfo: ({ op, mode, coords, values, groups, worldId, editorId, prevFeatureInfo, now }) => {
     const base = pickByFields(values, FORMAT_REGISTRY['地物线'].fields);
     const Linepoints = coords.map(p => [p.x, (Number.isFinite(p.y as any) ? (p.y as number) : -64), p.z] as [number, number, number]);
-    const out = { ...base, Linepoints };
+
+    // tags 仅记录“用户显式添加”的轻量字段；不自动把主干字段镜像到 tags
+    const tags = buildTagsFromGroupItems(groups?.tags);
+    const extensions = buildExtensionsFromGroupItems(groups?.extensions);
+
+    const out: any = { ...base, Linepoints };
+    if (Object.keys(tags).length > 0) out.tags = tags;
+    if (Object.keys(extensions).length > 0) out.extensions = extensions;
+
     return withSystemFields(FORMAT_REGISTRY['地物线'], out, { op, mode, worldId, editorId, prevFeatureInfo, now });
   },
   hydrate: (featureInfo) => ({
     values: {
       PLineID: featureInfo?.PLineID ?? '',
       PLineName: featureInfo?.PLineName ?? '',
-      PLineKind: featureInfo?.PLineKind ?? '',
-      PLineSKind: featureInfo?.PLineSKind ?? '',
-      Situation: featureInfo?.Situation ?? '',
+      PLineKind: featureInfo?.PLineKind ?? featureInfo?.tags?.PLineKind ?? '',
+      PLineSKind: featureInfo?.PLineSKind ?? featureInfo?.tags?.PLineSKind ?? '',
+      PLineSKind2: featureInfo?.PLineSKind2 ?? featureInfo?.tags?.PLineSKind2 ?? '',
+      Situation: featureInfo?.Situation ?? featureInfo?.tags?.Situation ?? '',
     },
-    groups: {},
+    groups: {
+      tags: flattenTagsToGroupItems(featureInfo?.tags),
+      extensions: flattenExtensionsToGroupItems(featureInfo?.extensions),
+    },
   }),
   coordsFromFeatureInfo: (featureInfo) => {
     const pts = featureInfo?.Linepoints;
@@ -1248,9 +1785,14 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
     if (!item || typeof item !== 'object') return '不是对象';
     if (!String((item as any).PLineID ?? '').trim()) return '缺少 PLineID';
     if (!String((item as any).PLineName ?? '').trim()) return '缺少 PLineName';
-    if (!String((item as any).PLineKind ?? '').trim()) return '缺少 PLineKind';
-    if (!String((item as any).PLineSKind ?? '').trim()) return '缺少 PLineSKind';
+    if (!String((item as any).PLineKind ?? '').trim() && !String((item as any)?.tags?.PLineKind ?? '').trim()) return '缺少 PLineKind（或 tags.PLineKind）';
+    if (!String((item as any).PLineSKind ?? '').trim() && !String((item as any)?.tags?.PLineSKind ?? '').trim()) return '缺少 PLineSKind（或 tags.PLineSKind）';
     if (!Array.isArray((item as any).Linepoints) || (item as any).Linepoints.length < 2) return 'Linepoints 必须是数组且至少 2 点';
+
+    const terr = validateTagsObjectSoft((item as any).tags);
+    if (terr) return terr;
+    const eerr = validateExtensionsObjectSoft((item as any).extensions);
+    if (eerr) return eerr;
     return;
   },
 },
@@ -1264,26 +1806,65 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
   fields: [
     { key: 'PGonID', label: '地物面ID(PGonID)', type: 'text' },
     { key: 'PGonName', label: '地物面名(PGonName)', type: 'text' },
+
     { key: 'PGonKind', label: '地物面类型(PGonKind)', type: 'text' },
     { key: 'PGonSKind', label: '地物面子类型(PGonSKind)', type: 'text' },
+    { key: 'PGonSKind2', label: '地物面三级子类型(PGonSKind2)', type: 'text', optional: true },
+
     { key: 'Situation', label: '状态(Situation)', type: 'text', optional: true },
   ],
-  groups: [],
-  buildFeatureInfo: ({ op, mode, coords, values, worldId, editorId, prevFeatureInfo, now }) => {
+  groups: [
+    {
+      key: 'tags',
+      label: 'tags（可选：用于筛选/渲染差分）',
+      optional: true,
+      addButtonText: '添加 tag',
+      fields: [
+        { key: 'tagKey', label: '字段名', type: 'select', options: TAG_KEY_OPTIONS },
+        { key: 'tagKeyOther', label: '其他字段名（当字段名=其他时填写）', type: 'text', optional: true },
+        { key: 'tagValue', label: '值', type: 'text' },
+      ],
+    },
+    {
+      key: 'extensions',
+      label: 'extensions（可选：仅记录信息，不参与规则）',
+      optional: true,
+      addButtonText: '添加扩展',
+      fields: [
+        { key: 'extGroup', label: '组/命名空间(extGroup)', type: 'text' },
+        { key: 'extKey', label: '字段名(extKey)', type: 'text' },
+        { key: 'extType', label: '值类型', type: 'select', options: EXT_VALUE_TYPE_OPTIONS, defaultValue: EXT_VALUE_TYPE_TEXT },
+        { key: 'extValue', label: '值(extValue)', type: 'text' },
+      ],
+    },
+  ],
+  buildFeatureInfo: ({ op, mode, coords, values, groups, worldId, editorId, prevFeatureInfo, now }) => {
     const base = pickByFields(values, FORMAT_REGISTRY['地物面'].fields);
     const Conpoints = coords.map(p => [p.x, (Number.isFinite(p.y as any) ? (p.y as number) : -63), p.z] as [number, number, number]);
-    const out = { ...base, Conpoints };
+
+    // tags 仅记录“用户显式添加”的轻量字段；不自动把主干字段镜像到 tags
+    const tags = buildTagsFromGroupItems(groups?.tags);
+    const extensions = buildExtensionsFromGroupItems(groups?.extensions);
+
+    const out: any = { ...base, Conpoints };
+    if (Object.keys(tags).length > 0) out.tags = tags;
+    if (Object.keys(extensions).length > 0) out.extensions = extensions;
+
     return withSystemFields(FORMAT_REGISTRY['地物面'], out, { op, mode, worldId, editorId, prevFeatureInfo, now });
   },
   hydrate: (featureInfo) => ({
     values: {
       PGonID: featureInfo?.PGonID ?? '',
       PGonName: featureInfo?.PGonName ?? '',
-      PGonKind: featureInfo?.PGonKind ?? '',
-      PGonSKind: featureInfo?.PGonSKind ?? '',
-      Situation: featureInfo?.Situation ?? '',
+      PGonKind: featureInfo?.PGonKind ?? featureInfo?.tags?.PGonKind ?? '',
+      PGonSKind: featureInfo?.PGonSKind ?? featureInfo?.tags?.PGonSKind ?? '',
+      PGonSKind2: featureInfo?.PGonSKind2 ?? featureInfo?.tags?.PGonSKind2 ?? '',
+      Situation: featureInfo?.Situation ?? featureInfo?.tags?.Situation ?? '',
     },
-    groups: {},
+    groups: {
+      tags: flattenTagsToGroupItems(featureInfo?.tags),
+      extensions: flattenExtensionsToGroupItems(featureInfo?.extensions),
+    },
   }),
   coordsFromFeatureInfo: (featureInfo) => {
     const pts = featureInfo?.Conpoints;
@@ -1301,9 +1882,14 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
     if (!item || typeof item !== 'object') return '不是对象';
     if (!String((item as any).PGonID ?? '').trim()) return '缺少 PGonID';
     if (!String((item as any).PGonName ?? '').trim()) return '缺少 PGonName';
-    if (!String((item as any).PGonKind ?? '').trim()) return '缺少 PGonKind';
-    if (!String((item as any).PGonSKind ?? '').trim()) return '缺少 PGonSKind';
+    if (!String((item as any).PGonKind ?? '').trim() && !String((item as any)?.tags?.PGonKind ?? '').trim()) return '缺少 PGonKind（或 tags.PGonKind）';
+    if (!String((item as any).PGonSKind ?? '').trim() && !String((item as any)?.tags?.PGonSKind ?? '').trim()) return '缺少 PGonSKind（或 tags.PGonSKind）';
     if (!Array.isArray((item as any).Conpoints) || (item as any).Conpoints.length < 3) return 'Conpoints 必须是数组且至少 3 点';
+
+    const terr = validateTagsObjectSoft((item as any).tags);
+    if (terr) return terr;
+    const eerr = validateExtensionsObjectSoft((item as any).extensions);
+    if (eerr) return eerr;
     return;
   },
 },
@@ -1427,66 +2013,50 @@ if (typeof item.Connect !== 'boolean') return '缺少或非法 Connect（boolean
     return;
   },
 },
-
-
-
-  // ===== 其余“占位型 subtype”（按默认处理，但让下拉里可选）=====
-  地标: {
-    key: '地标',
-    label: '地标',
-    modes: ['point'],
-    hideTempOutput: true,
-    fields: [],
-    groups: [],
-    buildFeatureInfo: ({ mode, coords }) => ({ subType: '地标', type: mode, coords }),
-    hydrate: () => ({ values: {}, groups: {} }),
-    coordsFromFeatureInfo: (fi) => (Array.isArray(fi?.coords) ? fi.coords : []),
-  },
-  栈道: {
-    key: '栈道',
-    label: '栈道',
-    modes: ['polyline'],
-    hideTempOutput: true,
-    fields: [],
-    groups: [],
-    buildFeatureInfo: ({ mode, coords }) => ({ subType: '栈道', type: mode, coords }),
-    hydrate: () => ({ values: {}, groups: {} }),
-    coordsFromFeatureInfo: (fi) => (Array.isArray(fi?.coords) ? fi.coords : []),
-  },
-  航道: {
-    key: '航道',
-    label: '航道',
-    modes: ['polyline'],
-    hideTempOutput: true,
-    fields: [],
-    groups: [],
-    buildFeatureInfo: ({ mode, coords }) => ({ subType: '航道', type: mode, coords }),
-    hydrate: () => ({ values: {}, groups: {} }),
-    coordsFromFeatureInfo: (fi) => (Array.isArray(fi?.coords) ? fi.coords : []),
-  },
-  一般建筑: {
-    key: '一般建筑',
-    label: '一般建筑',
-    modes: ['polygon'],
-    hideTempOutput: true,
-    fields: [],
-    groups: [],
-    buildFeatureInfo: ({ mode, coords }) => ({ subType: '一般建筑', type: mode, coords }),
-    hydrate: () => ({ values: {}, groups: {} }),
-    coordsFromFeatureInfo: (fi) => (Array.isArray(fi?.coords) ? fi.coords : []),
-  },
-  车站站体: {
-    key: '车站站体',
-    label: '车站站体',
-    modes: ['polygon'],
-    hideTempOutput: true,
-    fields: [],
-    groups: [],
-    buildFeatureInfo: ({ mode, coords }) => ({ subType: '车站站体', type: mode, coords }),
-    hydrate: () => ({ values: {}, groups: {} }),
-    coordsFromFeatureInfo: (fi) => (Array.isArray(fi?.coords) ? fi.coords : []),
-  },
 };
+
+
+
+// ---- Inject optional tags/extensions into every non-default FormatDef (single-source) ----
+// NOTE: Must run after FORMAT_REGISTRY is declared.
+const __OPTIONAL_TAG_EXT_ENRICHED__ = '__OPTIONAL_TAG_EXT_ENRICHED__';
+for (const def of Object.values(FORMAT_REGISTRY)) {
+  if (!def || def.key === '默认') continue;
+
+  // Prevent accidental double wrapping in dev HMR scenarios.
+  if ((def as any)[__OPTIONAL_TAG_EXT_ENRICHED__]) continue;
+  (def as any)[__OPTIONAL_TAG_EXT_ENRICHED__] = true;
+
+  def.groups = ensureOptionalTagExtGroups(def.groups);
+
+  const origBuild = def.buildFeatureInfo;
+  def.buildFeatureInfo = (args: any) => {
+    const out = origBuild(args);
+    return injectOptionalTagsExtensions(out, args?.groups);
+  };
+
+  const origHydrate = def.hydrate;
+  def.hydrate = (featureInfo: any) => {
+    const res = origHydrate(featureInfo);
+    const g = (res?.groups ?? {}) as Record<string, any[]>;
+    const opt = hydrateOptionalTagExtGroups(featureInfo);
+    return {
+      ...res,
+      groups: {
+        ...g,
+        ...(g.tags === undefined ? { tags: opt.tags } : {}),
+        ...(g.extensions === undefined ? { extensions: opt.extensions } : {}),
+      },
+    };
+  };
+
+  const origValidate = def.validateImportItem;
+  def.validateImportItem = (item: any) => {
+    const baseErr = origValidate?.(item);
+    if (baseErr) return baseErr;
+    return validateOptionalTagExtSoft(item);
+  };
+}
 
 export const getFormatDef = (key: FeatureKey): FormatDef => {
   // FeatureKey 理论上都在 FORMAT_REGISTRY 内，但这里做兜底更稳
@@ -1499,19 +2069,44 @@ export const getSubTypeOptions = (mode: DrawMode): FeatureKey[] => {
   return (Object.keys(FORMAT_REGISTRY) as FeatureKey[]).filter(k => FORMAT_REGISTRY[k].modes.includes(mode));
 };
 
-// 导出时坐标统一四舍五入到 0.5（不影响内存中编辑精度，仅影响输出）
-const round05 = (n: number) => {
+// 导出时坐标统一四舍五入到指定精度步进（不影响内存中编辑精度，仅影响输出）
+// NOTE: 0.1 是当前默认；如果未来需要更精细或更粗糙，请修改此常量。
+//       该精度用于“手动/导入/输出”链路，地图交互链路仍保留 0.5 网格化。
+const EXPORT_COORD_STEP = 0.1; // <-- 精度步进修改入口
+
+
+const fixNegZero = (n: number) => (Object.is(n, -0) ? 0 : n);
+
+const stepToDecimals = (step: number): number => {
+  if (!Number.isFinite(step) || step <= 0) return 0;
+  const s = String(step);
+  if (s.includes('e-')) {
+    const exp = Number(s.split('e-')[1]);
+    return Number.isFinite(exp) ? exp : 0;
+  }
+  const dot = s.indexOf('.');
+  if (dot < 0) return 0;
+  return Math.min(10, s.length - dot - 1);
+};
+
+
+const roundToStep = (n: number, step: number = EXPORT_COORD_STEP) => {
   if (!Number.isFinite(n)) return n;
-  const s = n < 0 ? -1 : 1;
-  const a = Math.abs(n);
-  return s * (Math.round((a + Number.EPSILON) * 2) / 2);
+  if (!Number.isFinite(step) || step <= 0) return n;
+
+  // Use toFixed to eliminate tails like -622.8000000000001
+  const q = (n + Number.EPSILON) / step;
+  const rq = Math.round(q);
+  const v = rq * step;
+  const dec = stepToDecimals(step);
+  return fixNegZero(Number(v.toFixed(dec)));
 };
 
 const roundXZDeep = (v: any): any => {
   if (Array.isArray(v)) {
     // 常见 [x,y,z]
     if (v.length === 3 && v.every((n) => typeof n === 'number')) {
-      return [round05(v[0]), v[1], round05(v[2])];
+      return [roundToStep(v[0]), v[1], roundToStep(v[2])];
     }
     return v.map(roundXZDeep);
   }
@@ -1520,8 +2115,8 @@ const roundXZDeep = (v: any): any => {
     // 常见 {x,z}
     if (typeof v.x === 'number' && typeof v.z === 'number') {
       const out: any = { ...v };
-      out.x = round05(v.x);
-      out.z = round05(v.z);
+      out.x = roundToStep(v.x);
+      out.z = roundToStep(v.z);
       return out;
     }
 

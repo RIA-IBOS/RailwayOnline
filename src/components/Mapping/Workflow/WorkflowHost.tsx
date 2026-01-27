@@ -8,8 +8,21 @@ import AppButton from '@/components/ui/AppButton';
 /** 与 MeasuringModule 内部一致的世界坐标点 */
 export type WorldPoint = { x: number; z: number; y?: number };
 
-/** 目前实现：railway / station；后续可扩展 */
-export type WorkflowKey = 'railway' | 'station';
+/** 目前实现：railway / station / ngf_*；后续可扩展 */
+export type WorkflowKey =
+  | 'railway'
+  | 'station'
+  | 'ngf_land'
+  | 'ngf_lis'
+  | 'ngf_wtb'
+  | 'ngf_wtr'
+  | 'ngf_bod'
+  | 'adm_dbz_set'
+  | 'adm_plz_plan'
+  | 'adm_line_settlement'
+  | 'adm_point_special'
+  | 'bud_building'
+  | 'flr_unit';
 
 export type WorkflowPreviewKind = 'point' | 'polyline' | 'polygon';
 

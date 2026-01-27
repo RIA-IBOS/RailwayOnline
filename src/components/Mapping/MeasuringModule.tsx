@@ -1,18 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 
 import {
   FORMAT_REGISTRY,
+  WORKFLOW_FEATURE_CATALOG,
   getSubTypeOptions,
   layerToJsonText,
-  parseCoordListFlexible,
   validateImportItemDetailed,
   validateRequiredDetailed,
   formatMissingEntries,
+  TAG_KEY_OTHER,
+  TAG_KEY_OPTIONS,
+  EXT_VALUE_TYPE_TEXT,
+  EXT_VALUE_TYPE_NULL,
+  EXT_VALUE_TYPE_OPTIONS,
   type FeatureKey,
-  type ImportFormat,
   type DrawMode,
 } from '@/components/Mapping/featureFormats';
 
@@ -36,6 +40,8 @@ import GridSnapModeSwitch, {
 
 import ManualPointInput from '@/components/Mapping/ManualPointInput';
 
+import CurveInputT, { type CurveInputTHandle } from '@/components/Mapping/CurveInputT';
+
 import MergePointPlatformStation, {
   type MergePointPlatformStationDraft,
 } from '@/components/Mapping/Special/MergePointPlatformStation';
@@ -57,8 +63,21 @@ import WorkflowHost, {
 } from '@/components/Mapping/Workflow/WorkflowHost';
 import RailwayWorkflow from '@/components/Mapping/Workflow/RailwayWorkflow';
 import StationWorkflow from '@/components/Mapping/Workflow/StationWorkflow';
+import NaturalLandWorkflow from '@/components/Mapping/Workflow/NaturalLandWorkflow';
+import NaturalLandSurfaceWorkflow from '@/components/Mapping/Workflow/NaturalLandSurfaceWorkflow';
+import NaturalWaterbodyWorkflow from '@/components/Mapping/Workflow/NaturalWaterbodyWorkflow';
+import NaturalWaterwayWorkflow from '@/components/Mapping/Workflow/NaturalWaterwayWorkflow';
+import NaturalBoundaryWorkflow from '@/components/Mapping/Workflow/NaturalBoundaryWorkflow';
+import SettlementBoundaryDeterminedWorkflow from '@/components/Mapping/Workflow/SettlementBoundaryDeterminedWorkflow';
+import SettlementBoundaryPlannedWorkflow from '@/components/Mapping/Workflow/SettlementBoundaryPlannedWorkflow';
+import SettlementBoundaryLineWorkflow from '@/components/Mapping/Workflow/SettlementBoundaryLineWorkflow';
+import SpecialCulturalPointWorkflow from '@/components/Mapping/Workflow/SpecialCulturalPointWorkflow';
+import BuildingWorkflow from '@/components/Mapping/Workflow/BuildingWorkflow';
+import FloorUnitWorkflow from '@/components/Mapping/Workflow/FloorUnitWorkflow';
 import AppButton from '@/components/ui/AppButton';
 import AppCard from '@/components/ui/AppCard';
+
+import { checkTempMountIdConflicts, type TempLayerIdCandidate } from '@/components/Rules/globalIdIndex';
 
 
 
@@ -84,7 +103,15 @@ type MeasuringModuleProps = {
   launcherSlot?: (launcher: React.ReactNode) => React.ReactNode;
 };
 
-export default function MeasuringModule(props: MeasuringModuleProps) {
+export type MeasuringModuleHandle = {
+  /**
+   * 在切换世界等场景下使用：若用户取消确认，则返回 false 并阻止上层继续执行。
+   * 内部会负责：先关闭“临时挂载”，再清除测绘图层并退出测绘。
+   */
+  requestCloseAndClear: (actionLabel?: string) => boolean;
+};
+
+const MeasuringModule = forwardRef<MeasuringModuleHandle, MeasuringModuleProps>((props, ref) => {
   const { mapReady, leafletMapRef, projectionRef, currentWorldId, closeSignal, onBecameActive, launcherSlot } = props;
 
 
@@ -157,12 +184,26 @@ const [featureInfo, setFeatureInfo] = useState<any>({});
 // JSON 表单：动态 fields/groups（由 FORMAT_REGISTRY[subType] 驱动）
 const [groupInfo, setGroupInfo] = useState<Record<string, any[]>>({});
 
+// extensions Step A：按组分区编辑时用于新增 extGroup
+const [newExtGroupInput, setNewExtGroupInput] = useState('');
+
 // 编辑者ID：用于自动写入 CreateBy / ModifityBy（不直接作为附加字段输出）
 const [editorIdInput, setEditorIdInput] = useState('');
 
 // ======== 切换确认：附加信息不为空时提示可能丢失 ========
 const [switchWarnOpen, setSwitchWarnOpen] = useState(false);
 const pendingSwitchActionRef = useRef<null | (() => void)>(null);
+
+
+// ======== 测绘进入/退出：要素类型选择状态复位（解决“附加信息面板残留”） ========
+const resetFeatureSelectionState = () => {
+  // 要素类型回到默认，附加信息回到空（避免下次进入测绘仍残留上次编辑的字段面板）
+  setSubType('默认');
+  const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
+  setFeatureInfo(hydrated.values ?? {});
+  setGroupInfo(hydrated.groups ?? {});
+  setNewExtGroupInput('');
+};
 
 const isExtraInfoNonEmpty = () => {
   if (subType === '默认') return false;
@@ -223,6 +264,9 @@ const endMeasuringNow = () => {
   // 1) 关闭 UI
   setMeasuringActive(false);
 
+  // 复位要素类型/附加信息选择状态（避免下次进入测绘残留）
+  resetFeatureSelectionState();
+
   // 2) 清空测绘图层（fixedRoot + 状态）
   clearAllLayers();
 
@@ -257,10 +301,8 @@ const cancelEndMeasuring = () => {
 
 // ---- 导入矢量数据相关状态 ----
 const [importPanelOpen, setImportPanelOpen] = useState(false);
-
-const [importFormat, setImportFormat] = useState<ImportFormat>('点');
-
 const [importText, setImportText] = useState('');
+
 
 const randomColor = () => {
   const r = Math.floor(Math.random()*255);
@@ -281,6 +323,18 @@ const workflowPreviewMapRef = useRef<Map<string, L.Layer>>(new Map());
 
 // ======== ControlPointsT：控制点修改/添加（替代旧 ControlPointTools） ========
 const controlPointsTRef = useRef<ControlPointsTHandle | null>(null);
+
+// ======== CurveInputT：曲线输入（独立临时容器） ========
+const curveInputTRef = useRef<CurveInputTHandle | null>(null);
+
+// CurveInputT 面板开启期间：完全冻结主绘制/编辑区交互（独立于 ControlPointsT 的抑制状态）
+const [curveInputFrozen, setCurveInputFrozen] = useState(false);
+const curveInputFrozenRef = useRef(false);
+// 重要：冻结需要“立即生效”，避免刚打开面板就点击地图时主绘制抢先加点。
+const setCurveInputFrozenImmediate = (v: boolean) => {
+  curveInputFrozenRef.current = v;
+  setCurveInputFrozen(v);
+};
 
 // ControlPointsT 开启修改/添加时：禁止绘制区 click 加点（避免与“控制点移动/插入”冲突）
 const [drawClickSuppressed, setDrawClickSuppressed] = useState(false);
@@ -327,6 +381,32 @@ useEffect(() => {
 // ======== JSON 导出窗口（替代 alert/print） ========
 const [jsonPanelOpen, setJsonPanelOpen] = useState(false);
 const [jsonPanelText, setJsonPanelText] = useState('');
+const [jsonExportSubType, setJsonExportSubType] = useState<string>('__ALL__');
+
+// 临时挂载到 RuleDrivenLayer 的本地存储 key（与 RuleDrivenLayer 保持一致）
+const TEMP_RULE_SOURCES_KEY = 'ria_temp_rule_sources_v1';
+
+type TempRuleSource = {
+  uid: string;
+  worldId: string;
+  label?: string;
+  enabled: boolean;
+  items: any[];
+};
+
+// ======== “临时挂载(全局)”只读模式（模块化开关，便于后续移除） ========
+const [tempMountAllActive, setTempMountAllActive] = useState(false);
+const TEMP_MOUNT_READONLY_REASON = '临时挂载模式下仅可查看，无法编辑或保存。';
+const isTempMountReadonly = tempMountAllActive;
+const guardTempMountReadonly = () => {
+  if (!isTempMountReadonly) return false;
+  window.alert(TEMP_MOUNT_READONLY_REASON);
+  return true;
+};
+
+// ======== 临时挂载：全局ID冲突检查遮罩（<1s 不显示） ========
+const [tempMountIdCheckOpen, setTempMountIdCheckOpen] = useState(false);
+const [tempMountIdCheckText, setTempMountIdCheckText] = useState('正在对比要素ID...');
 
 
 type SpecialDraftMode =
@@ -428,7 +508,6 @@ useEffect(() => {
 
 // 下拉菜单开关（仅再次点击“测绘”主按钮才收回）
 const [measureDropdownOpen, setMeasureDropdownOpen] = useState(false);
-const [layerPanelCollapsed, setLayerPanelCollapsed] = useState(false);
 
 const toggleMeasureDropdown = () => {
   setMeasureDropdownOpen((v) => !v);
@@ -439,6 +518,32 @@ const confirmExitAndClear = (actionLabel: string) => {
   const ok = window.confirm(`${actionLabel}将清除所有测绘图层，是否确认？`);
   if (!ok) return false;
 
+  // 退出测绘时：若仍处于“临时挂载”模式，必须先关闭挂载（并触发规则图层重载）
+  // 目标：避免退出测绘后仍残留挂载源，导致后续世界/数据处理混乱。
+  try {
+    const raw = localStorage.getItem(TEMP_RULE_SOURCES_KEY);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj === 'object') {
+        const prev = Array.isArray((obj as any)?.[currentWorldId]) ? ((obj as any)[currentWorldId] as any[]) : [];
+        const prefix = `${currentWorldId}::layer-`;
+        const next = prev.filter((x) => {
+          const uid = x && typeof x === 'object' ? String((x as any).uid ?? '') : '';
+          return !uid.startsWith(prefix);
+        });
+        (obj as any)[currentWorldId] = next;
+        localStorage.setItem(TEMP_RULE_SOURCES_KEY, JSON.stringify(obj));
+        window.dispatchEvent(new CustomEvent('ria-temp-rule-sources-changed', { detail: { worldId: currentWorldId } }));
+      }
+    }
+  } catch {
+    // ignore
+  }
+  setTempMountAllActive(false);
+
+  // 退出测绘：强制关闭并清空“曲线输入”临时容器（避免残留与抑制状态遗留）
+  curveInputTRef.current?.requestCloseAndClear?.();
+
   // 关闭测绘与面板
   setMeasuringActive(false);
   setMeasureDropdownOpen(false);
@@ -448,6 +553,8 @@ const confirmExitAndClear = (actionLabel: string) => {
   setMeasuringVariant('full');
   setWorkflowRunning(false);
 
+  // 复位要素类型/附加信息选择状态（避免残留）
+  resetFeatureSelectionState();
 
   // 清空测绘图层（fixed + draft）及状态
   clearAllLayers();
@@ -465,6 +572,108 @@ const confirmExitAndClear = (actionLabel: string) => {
   return true;
 };
 
+useImperativeHandle(ref, () => ({
+  requestCloseAndClear: (actionLabel?: string) => {
+    const label = (actionLabel ?? '关闭测绘').trim() || '关闭测绘';
+
+    const hasMeasuringContent =
+      measuringActive ||
+      (layersRef.current?.length ?? 0) > 0 ||
+      drawing ||
+      editingLayerId !== null ||
+      tempPoints.length > 0 ||
+      tempMountAllActive;
+
+    if (!hasMeasuringContent) return true;
+    return confirmExitAndClear(label);
+  },
+}));
+
+// ===== 模式切换（完整 <-> 快捷） =====
+// 目标：
+// 1) 测绘已开启时，允许在下拉菜单内切换另一种模式
+// 2) 若存在“未完成编辑/未完成工作流/合一草稿”等临时内容，则提示确认
+// 3) 模式切换仅清理临时容器（workflow + draft + 编辑/绘制态），不删除 fixed 图层与图层管理区内容
+
+const hasUnsavedWorkForVariantSwitch = () => {
+  // ① 编辑/绘制中的临时几何
+  const hasFullTemp = drawing || editingLayerId !== null || tempPoints.length > 0;
+
+  // ② 快捷工作流的运行态
+  const hasWorkflowTemp = workflowRunning;
+
+  // ③ “合一”草稿（内部有附加信息/未提交）
+  const hasSpecial = specialDraftMode !== 'none' && hasSpecialDraftData();
+
+  // ④ 兜底：若草稿容器仍有内容，也视为未完成（避免边界残留）
+  const hasDraftLayers =
+    (draftGeomRef.current?.getLayers?.().length ?? 0) > 0 ||
+    (draftEndpointRef.current?.getLayers?.().length ?? 0) > 0 ||
+    (draftVertexOverlayRef.current?.getLayers?.().length ?? 0) > 0;
+
+  // ⑤ 兜底：快捷工作流预览容器仍有内容
+  const hasWorkflowPreview = workflowPreviewMapRef.current.size > 0;
+
+  return hasFullTemp || hasWorkflowTemp || hasSpecial || hasDraftLayers || hasWorkflowPreview;
+};
+
+const clearTemporaryForVariantSwitch = () => {
+  // 仅清理临时容器：workflow + draft + 编辑/绘制态；不清 fixedRoot 与 layers
+  workflowRootRef.current?.clearLayers();
+  workflowPreviewMapRef.current.clear();
+  clearDraftOverlays();
+
+  // 曲线输入也属于临时容器
+  curveInputTRef.current?.requestCloseAndClear?.();
+
+  // 编辑/绘制态复位
+  setTempPoints([]);
+  setRedoStack([]);
+  setEditingLayerId(null);
+  setDrawing(false);
+  setDrawMode('none');
+
+  // 工作流态复位
+  setWorkflowRunning(false);
+
+  // 控制点显示复位（避免切换后意外常显）
+  setShowDraftControlPoints(false);
+  setShowDraftControlPointCoords(false);
+  setDrawClickSuppressed(false);
+  setShowDraftControlPointsLocked(false);
+
+  // 合一草稿复位
+  if (specialDraftMode !== 'none') setSpecialDraftMode('none');
+};
+
+const switchMeasuringVariantFromMenu = (target: 'full' | 'workflow') => {
+  if (!measuringActive) return;
+  if (target === measuringVariant) {
+    // 仍收起菜单，避免用户误以为没有响应
+    setMeasureDropdownOpen(false);
+    return;
+  }
+
+  const label = target === 'full' ? '完整模式' : '快捷模式';
+
+  const doSwitch = () => {
+    // 切换时建议关闭导入面板，避免 UI 残留
+    setImportPanelOpen(false);
+    clearTemporaryForVariantSwitch();
+    setMeasuringVariant(target);
+    setMeasureDropdownOpen(false);
+  };
+
+  // 若存在未完成内容：提示确认（文案与“关闭时”保持同类语义，但仅清理临时/切断工作流）
+  if (hasUnsavedWorkForVariantSwitch()) {
+    const ok = window.confirm(`切换到${label}将清除临时测绘图层并结束当前未完成的编辑/工作流，是否确认？`);
+    if (!ok) return;
+  }
+
+  // “合一”模式需额外确认（其内部附加信息不应静默丢弃）
+  requestExitSpecialDraftIfNeeded(doSwitch);
+};
+
 const startMeasuringFromMenu = (variant: 'full' | 'workflow') => {
   if (measuringActive) return;
 
@@ -473,6 +682,9 @@ const startMeasuringFromMenu = (variant: 'full' | 'workflow') => {
 
   // 进入测绘前清空
   clearAllLayers();
+
+  // 复位要素类型/附加信息选择状态（避免上一次编辑残留）
+  resetFeatureSelectionState();
 
   setMeasuringVariant(variant);
   setWorkflowRunning(false);
@@ -539,6 +751,9 @@ useEffect(() => {
   if (!map) return;
 
   const handleClick = (e: L.LeafletMouseEvent) => {
+    // 曲线输入面板开启时：主绘制/编辑区完全冻结
+    if (curveInputFrozenRef.current) return;
+
     // 关键：ControlPointsT 工作时，绘制监听器必须完全不执行
     // （否则同一次 click 会同时触发“移动控制点”和“绘制加点”，导致草稿线变长）
     if (controlPointsTRef.current?.isBusy?.()) return;
@@ -610,6 +825,9 @@ const updateLatestEndpointMarker = (p: { x: number; z: number }, color: string) 
 
 
 const onMapDrawClick = (e: L.LeafletMouseEvent) => {
+  // 曲线输入面板开启时：主绘制/编辑区完全冻结
+  if (curveInputFrozenRef.current) return;
+
   // 双保险：即使某些情况下旧 click handler 没卸载，这里也确保不加点
   if (controlPointsTRef.current?.isBusy?.()) return;
   if (drawClickSuppressedRef.current) return;
@@ -643,6 +861,7 @@ const onMapDrawClick = (e: L.LeafletMouseEvent) => {
 
 const onManualPointSubmit = (v: { x: number; y: number; z: number }) => {
   if (!measuringActive || !drawing || drawMode === 'none') return;
+  if (curveInputFrozenRef.current) return;
   if (controlPointsTRef.current?.isBusy?.()) return;
   if (drawClickSuppressedRef.current) return;
 
@@ -810,6 +1029,7 @@ useEffect(() => {
 
 
 const finishLayer = () => {
+  if (guardTempMountReadonly()) return;
   const map = leafletMapRef.current;
   const proj = projectionRef.current;
   if (!map || !proj) return;
@@ -1125,13 +1345,16 @@ const getLayerJSONOutput = (layer: LayerType) => {
   return layerToJsonText(layer);
 };
 
-// 导出“图层管理区全部图层”的 JSON（外层为数组；每个条目与单层导出一致）
-const getAllLayersJSONOutput = () => {
+
+const getLayersJSONOutputBySubType = (target: FeatureKey | '__ALL__') => {
   const items = layers
     .filter((l) => Boolean(l?.jsonInfo?.featureInfo))
+    .filter((l) => {
+      if (target === '__ALL__') return true;
+      return (l.jsonInfo?.subType as any) === target;
+    })
     .map((l) => {
       try {
-        // 单层导出返回形如: [ { ... } ]，这里取第 1 个元素
         const one = JSON.parse(layerToJsonText(l));
         if (Array.isArray(one) && one.length > 0) return one[0];
         return null;
@@ -1144,8 +1367,355 @@ const getAllLayersJSONOutput = () => {
   return JSON.stringify(items, null, 2);
 };
 
+const getAvailableSubTypes = (): FeatureKey[] => {
+  const set = new Set<string>();
+  for (const l of layers) {
+    const st = l.jsonInfo?.subType;
+    if (st && typeof st === 'string' && st !== '默认') set.add(st);
+  }
+  return Array.from(set) as FeatureKey[];
+};
 
- 
+// ======== JSON 导出：按 WORKFLOW_FEATURE_CATALOG 分划（更细粒度筛选） ========
+type WorkflowCatalogExportKey = `__WF__:${string}`;
+
+const readString1 = (obj: any, keys: string[]) => {
+  for (const k of keys) {
+    const s = String(obj?.[k] ?? '').trim();
+    if (s) return s;
+  }
+  return '';
+};
+
+/**
+ * 字段解析接口（导出筛选用 Kind/SKind/SKind2 三元组）
+ *
+ * 说明：通用要素集在不同几何类型下采用不同字段命名：
+ * - 面（Polygon）：PGonKind / PGonSKind / PGonSKind2
+ * - 线（Polyline，ISL）：PLineKind / PLineSKind / PLineSKind2
+ * - 点（Point，ISP）：PointKind / PointSKind / PointSKind2
+ * - 兼容旧/杂项：Kind / SKind / SKind2
+ *
+ * 后续如需新增来源字段，请在此处集中扩展。
+ */
+const extractKindTripletFromFeatureInfo = (fi: any): { Kind: string; SKind: string; SKind2: string } => {
+  const Kind =
+    readString1(fi, ['Kind', 'PGonKind', 'PLineKind', 'PointKind']) ||
+    readString1(fi?.tags, ['Kind', 'PGonKind', 'PLineKind', 'PointKind']) ||
+    readString1(fi, ['Class']) ||
+    '';
+  const SKind =
+    readString1(fi, ['SKind', 'PGonSKind', 'PLineSKind', 'PointSKind']) ||
+    readString1(fi?.tags, ['SKind', 'PGonSKind', 'PLineSKind', 'PointSKind']) ||
+    '';
+  const SKind2 =
+    readString1(fi, ['SKind2', 'PGonSKind2', 'PLineSKind2', 'PointSKind2']) ||
+    readString1(fi?.tags, ['SKind2', 'PGonSKind2', 'PLineSKind2', 'PointSKind2']) ||
+    '';
+  return { Kind, SKind, SKind2 };
+};
+
+const buildWorkflowCatalogKey = (triplet: { Kind: string; SKind: string; SKind2: string }): WorkflowCatalogExportKey =>
+  (`__WF__:${triplet.Kind}/${triplet.SKind}/${triplet.SKind2}` as WorkflowCatalogExportKey);
+
+const parseWorkflowCatalogKey = (key: string): { Kind: string; SKind: string; SKind2: string } | null => {
+  const s = String(key ?? '');
+  if (!s.startsWith('__WF__:')) return null;
+  const rest = s.slice('__WF__:'.length);
+  const parts = rest.split('/');
+  return { Kind: parts[0] ?? '', SKind: parts[1] ?? '', SKind2: parts[2] ?? '' };
+};
+
+const getAvailableWorkflowCatalogKeys = (): Array<{ key: WorkflowCatalogExportKey; label: string }> => {
+  const seen = new Set<string>();
+  const out: Array<{ key: WorkflowCatalogExportKey; label: string }> = [];
+
+  for (const l of layers) {
+    const fi = l?.jsonInfo?.featureInfo ?? {};
+    const t = extractKindTripletFromFeatureInfo(fi);
+    if (!t.Kind) continue;
+
+    // 仅列出注册表中存在的条目（避免按钮膨胀/无法解释）
+    const hit = WORKFLOW_FEATURE_CATALOG.find((e) => e.kind === t.Kind && e.skind === t.SKind && e.skind2 === t.SKind2);
+    if (!hit) continue;
+
+    const k = buildWorkflowCatalogKey(t);
+    if (seen.has(k)) continue;
+    seen.add(k);
+
+    // UI 按键仅显示 name，避免因承载过多字段导致按钮堆叠拥挤。
+    out.push({ key: k, label: hit.name });
+  }
+
+  return out.sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'));
+};
+
+const getLayersJSONOutputByWorkflowCatalogKey = (key: WorkflowCatalogExportKey): string => {
+  const t = parseWorkflowCatalogKey(key);
+  if (!t) return '[]';
+
+  const filtered = layers.filter((l) => {
+    const fi = l?.jsonInfo?.featureInfo ?? {};
+    const k = extractKindTripletFromFeatureInfo(fi);
+    return k.Kind === t.Kind && k.SKind === t.SKind && k.SKind2 === t.SKind2;
+  });
+
+  const items = filtered
+    .map((l) => l?.jsonInfo?.featureInfo)
+    .filter(Boolean);
+
+  return JSON.stringify(items, null, 2);
+};
+
+
+const getLayerDisplayTitle = (l: LayerType) => {
+  const fi = l?.jsonInfo?.featureInfo;
+  const st = l?.jsonInfo?.subType as FeatureKey | undefined;
+  if (!fi || !st || !(FORMAT_REGISTRY as any)[st]) {
+    return `#${l.id} ${l.mode}`;
+  }
+  const def = (FORMAT_REGISTRY as any)[st] as any;
+  const idKey = Array.isArray(def?.fields)
+    ? (def.fields.find((f: any) => typeof f?.key === 'string' && (String(f.key).endsWith('ID') || String(f.key).endsWith('Id') || String(f.key).endsWith('id')))?.key as string | undefined)
+    : undefined;
+  const nameKey = Array.isArray(def?.fields)
+    ? (def.fields.find((f: any) => typeof f?.key === 'string' && (String(f.key).endsWith('Name') || String(f.key).endsWith('name')))?.key as string | undefined)
+    : undefined;
+
+  const idVal = idKey ? String((fi as any)[idKey] ?? '').trim() : '';
+  const nameVal = nameKey ? String((fi as any)[nameKey] ?? '').trim() : '';
+  const head = idVal || `#${l.id}`;
+  const mid = nameVal ? ` ${nameVal}` : '';
+  return `${head}${mid}`;
+};
+
+// 图层主 ID（用于全局重复性检查/提示）：尽量与 getLayerDisplayTitle 保持一致的取值策略
+const getLayerPrimaryIdValue = (l: LayerType): string => {
+  const fi = l?.jsonInfo?.featureInfo;
+  const st = l?.jsonInfo?.subType as FeatureKey | undefined;
+  if (!fi || !st || !(FORMAT_REGISTRY as any)[st]) return '';
+  const def = (FORMAT_REGISTRY as any)[st] as any;
+  const idKey = Array.isArray(def?.fields)
+    ? (def.fields.find((f: any) => typeof f?.key === 'string' && (String(f.key).endsWith('ID') || String(f.key).endsWith('Id') || String(f.key).endsWith('id')))?.key as string | undefined)
+    : undefined;
+  return idKey ? String((fi as any)[idKey] ?? '').trim() : '';
+};
+
+// 图层主 Name（用于简略CSV）：尽量与 getLayerDisplayTitle 保持一致的取值策略
+const getLayerPrimaryNameValue = (l: LayerType): string => {
+  const fi = l?.jsonInfo?.featureInfo;
+  const st = l?.jsonInfo?.subType as FeatureKey | undefined;
+  if (!fi || !st || !(FORMAT_REGISTRY as any)[st]) return '';
+  const def = (FORMAT_REGISTRY as any)[st] as any;
+  const nameKey = Array.isArray(def?.fields)
+    ? (def.fields.find((f: any) => typeof f?.key === 'string' && (String(f.key).endsWith('Name') || String(f.key).endsWith('name')))?.key as string | undefined)
+    : undefined;
+  return nameKey ? String((fi as any)[nameKey] ?? '').trim() : '';
+};
+
+// ===== 简略 CSV 导出（Type,Class,World,ID,Name） =====
+const csvEscape = (v: any) => {
+  const s = v === null || v === undefined ? '' : String(v);
+
+  // 额外处理少见“Unicode 换行符”，避免部分软件乱断行
+  const normalized = s.replace(/\u2028|\u2029/g, ' ');
+
+  const escaped = normalized.replace(/"/g, '""');
+  return /[",\n\r]/.test(escaped) ? `"${escaped}"` : escaped;
+};
+
+const buildBriefCsvFromLayers = (list: LayerType[], worldIdFallback: string) => {
+  const header = ['Type', 'Class', 'World', 'ID', 'Name'];
+
+  // Windows/Excel 更稳：用 CRLF
+  const CRLF = '\r\n';
+
+  const rows = list.map((l) => {
+    const fi: any = l?.jsonInfo?.featureInfo ?? {};
+    const cls = String((l?.jsonInfo?.subType ?? '默认') as any);
+
+    const type =
+      (fi?.Type ?? fi?.type) ??
+      (l.mode === 'point' ? 'Point' : l.mode === 'polyline' ? 'Line' : 'Polygon');
+    const world = (fi?.World ?? fi?.world ?? worldIdFallback) ?? '';
+    const id = getLayerPrimaryIdValue(l);
+    const name = getLayerPrimaryNameValue(l);
+
+    return [type, cls, world, id, name].map(csvEscape).join(',');
+  });
+
+  // 加 BOM：Excel/WPS 双击打开更容易识别 UTF-8
+  return `\uFEFF${header.join(',')}${CRLF}${rows.join(CRLF)}${CRLF}`;
+};
+
+const downloadTextFile = (text: string, filename: string, mime: string) => {
+  try {
+    // 这里 text 已含 BOM；如果你不想在 text 里加 BOM，也可以 Blob 前加 bytes
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    // ignore
+  }
+};
+
+const readTempRuleSources = (): Record<string, TempRuleSource[]> => {
+  try {
+    const raw = localStorage.getItem(TEMP_RULE_SOURCES_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object') return {};
+    return obj as any;
+  } catch {
+    return {};
+  }
+};
+
+const writeTempRuleSources = (all: Record<string, TempRuleSource[]>) => {
+  try {
+    localStorage.setItem(TEMP_RULE_SOURCES_KEY, JSON.stringify(all));
+    window.dispatchEvent(new CustomEvent('ria-temp-rule-sources-changed', { detail: { worldId: currentWorldId } }));
+  } catch {
+    // ignore
+  }
+};
+
+const [tempMountUiVersion, setTempMountUiVersion] = useState(0);
+
+const getLayerTempUid = (layerId: number) => `${currentWorldId}::layer-${layerId}`;
+
+const getTempMountedEntryByLayer = (layerId: number): TempRuleSource | undefined => {
+  const uid = getLayerTempUid(layerId);
+  const all = readTempRuleSources();
+  const list = (all?.[currentWorldId] ?? []) as any[];
+  if (!Array.isArray(list)) return undefined;
+  const found = list.find((x) => x && typeof x === 'object' && String((x as any).uid) === uid);
+  return found as any;
+};
+
+const setTempMountedEnabledForLayer = (layerId: number, enabled: boolean) => {
+  const uid = getLayerTempUid(layerId);
+  const all = readTempRuleSources();
+  const prev = Array.isArray(all?.[currentWorldId]) ? (all[currentWorldId] as any[]) : [];
+  const next = prev.map((x) => {
+    if (x && typeof x === 'object' && String((x as any).uid) === uid) {
+      return { ...(x as any), enabled: Boolean(enabled) };
+    }
+    return x;
+  });
+  writeTempRuleSources({ ...all, [currentWorldId]: next as any });
+  setTempMountUiVersion((v) => v + 1);
+};
+
+const removeAllTempMountedLayersForWorld = (layerIds: number[]) => {
+  const all = readTempRuleSources();
+  const prev = Array.isArray(all?.[currentWorldId]) ? (all[currentWorldId] as any[]) : [];
+  const uidSet = new Set(layerIds.map((id) => getLayerTempUid(id)));
+  const next = prev.filter((x) => !(x && typeof x === 'object' && uidSet.has(String((x as any).uid))));
+  writeTempRuleSources({ ...all, [currentWorldId]: next as any });
+  setTempMountUiVersion((v) => v + 1);
+};
+
+const mountAllLayersToTempSources = (layerList: LayerType[]) => {
+  const all = readTempRuleSources();
+  const prev = Array.isArray(all?.[currentWorldId]) ? (all[currentWorldId] as any[]) : [];
+
+  // 先移除同 uid 的旧条目（避免重复）
+  const uidSet = new Set(layerList.map((l) => getLayerTempUid(l.id)));
+  const kept = prev.filter((x) => !(x && typeof x === 'object' && uidSet.has(String((x as any).uid))));
+
+  const nextEntries: TempRuleSource[] = [];
+  for (const layer of layerList) {
+    let items: any[] = [];
+    try {
+      const one = JSON.parse(layerToJsonText(layer));
+      if (Array.isArray(one)) items = one;
+    } catch {
+      items = [];
+    }
+    if (!items.length) continue;
+    nextEntries.push({
+      uid: getLayerTempUid(layer.id),
+      worldId: currentWorldId,
+      label: getLayerDisplayTitle(layer),
+      enabled: Boolean(layer.visible),
+      items,
+    });
+  }
+
+  writeTempRuleSources({ ...all, [currentWorldId]: [...kept, ...nextEntries] as any });
+  setTempMountUiVersion((v) => v + 1);
+};
+
+//（单图层临时挂载按钮已被“全局临时挂载”替代，故移除相关逻辑）
+// ======== 临时挂载(全局)状态同步：若当前 world 存在 layer-* 的临时源，则视为已进入挂载模式 ========
+useEffect(() => {
+  const sync = () => {
+    const all = readTempRuleSources();
+    const list = (all?.[currentWorldId] ?? []) as any[];
+    const has = Array.isArray(list) && list.some((x) => {
+      const uid = x && typeof x === 'object' ? String((x as any).uid ?? '') : '';
+      return uid.startsWith(`${currentWorldId}::layer-`);
+    });
+    setTempMountAllActive(has);
+  };
+
+  sync();
+  const handler = () => sync();
+  window.addEventListener('ria-temp-rule-sources-changed', handler as any);
+  return () => window.removeEventListener('ria-temp-rule-sources-changed', handler as any);
+}, [currentWorldId]);
+
+// ======== 图层管理：顶部横向滚动条（始终可见）与内容区横向滚动同步 ========
+const layerMgrTopXRef = useRef<HTMLDivElement | null>(null);
+const layerMgrBodyRef = useRef<HTMLDivElement | null>(null);
+const layerMgrSpacerRef = useRef<HTMLDivElement | null>(null);
+const layerMgrSyncLockRef = useRef(false);
+
+useEffect(() => {
+  const top = layerMgrTopXRef.current;
+  const body = layerMgrBodyRef.current;
+  const spacer = layerMgrSpacerRef.current;
+  if (!top || !body || !spacer) return;
+
+  const syncSpacerWidth = () => {
+    spacer.style.width = `${body.scrollWidth}px`;
+  };
+  syncSpacerWidth();
+
+  const onTopScroll = () => {
+    if (layerMgrSyncLockRef.current) return;
+    layerMgrSyncLockRef.current = true;
+    body.scrollLeft = top.scrollLeft;
+    layerMgrSyncLockRef.current = false;
+  };
+  const onBodyScroll = () => {
+    if (layerMgrSyncLockRef.current) return;
+    layerMgrSyncLockRef.current = true;
+    top.scrollLeft = body.scrollLeft;
+    layerMgrSyncLockRef.current = false;
+  };
+
+  top.addEventListener('scroll', onTopScroll);
+  body.addEventListener('scroll', onBodyScroll);
+
+  const ro = new ResizeObserver(syncSpacerWidth);
+  ro.observe(body);
+
+  return () => {
+    top.removeEventListener('scroll', onTopScroll);
+    body.removeEventListener('scroll', onBodyScroll);
+    ro.disconnect();
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [layers.length, tempMountAllActive, tempMountUiVersion, measuringActive]);
+
  
 const handleUndo = () => {
   if (!tempPoints.length) return;
@@ -1270,6 +1840,7 @@ const currentTempOutput = () => {
 
  
 const editLayer = (id: number) => {
+  if (guardTempMountReadonly()) return;
   const layer = layers.find(l => l.id === id);
   if (!layer) return;
 
@@ -1298,7 +1869,7 @@ const editLayer = (id: number) => {
 
     const hydrated = def.hydrate(layer.jsonInfo.featureInfo ?? {});
     setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
+    setGroupInfo(normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any));
   } else {
     setSubType('默认');
     const hydrated = FORMAT_REGISTRY['默认'].hydrate({});
@@ -1356,12 +1927,41 @@ const handleImport = () => {
   }
 
   // ---------- 批量导入：只支持“新规范 JSON 条目”，不识别点/线/面默认文本坐标，也不识别“默认”JSON ----------
-  if (importFormat === '批量') {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      alert('批量导入只支持合法 JSON：' + e);
+    const tryParseFlexible = (raw: string): any => {
+      const t = String(raw ?? '').trim();
+      if (!t) return null;
+
+      // 1) 直接 JSON.parse（支持：数组、对象、单条对象）
+      try {
+        return JSON.parse(t);
+      } catch {
+        // ignore
+      }
+
+      // 2) 宽容：允许“多条对象”但外层未包 []：
+      //   - "{...},{...}" 或 "{...}\n{...}"
+      //   - 处理：把 "}\s*{" 变为 "},{", 再外包 [...]
+      // 注意：这不是完整的 JSON 修复器，但对常见粘贴格式足够。
+      const normalized = t
+        .replace(/\r\n/g, '\n')
+        .replace(/\n+/g, '\n')
+        .replace(/}\s*,\s*{/g, '},{')
+        .replace(/}\s*\n\s*{/g, '},{')
+        .trim()
+        // 去掉可能的尾逗号
+        .replace(/,\s*$/g, '');
+
+      const wrapped = `[${normalized}]`;
+      try {
+        return JSON.parse(wrapped);
+      } catch {
+        return null;
+      }
+    };
+
+    const parsed = tryParseFlexible(text);
+    if (parsed === null || parsed === undefined) {
+      alert('批量导入只支持合法 JSON（可为数组/对象/单对象，或多对象但外层未包 []）。');
       return;
     }
 
@@ -1436,13 +2036,14 @@ const handleImport = () => {
 
       // hydrate 结果复用
       const hydrated = v.hydrated ?? def.hydrate(item);
+      const normGroups = normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any);
 
       const featureInfoOut = def.buildFeatureInfo({
         op: 'import',
         mode,
         coords,
         values: hydrated.values ?? {},
-        groups: hydrated.groups ?? {},
+        groups: normGroups,
         worldId: currentWorldId,
         prevFeatureInfo: item,
         now: new Date(),
@@ -1497,177 +2098,6 @@ const handleImport = () => {
     setImportText('');
     setImportPanelOpen(false);
     return;
-  }
-
-  const color = randomColor();
-
-  // ========== 1) 点 / 线 / 面（文本坐标） ==========
-  if (importFormat === '点' || importFormat === '线' || importFormat === '面') {
-    const coords = parseCoordListFlexible(text);
-    if (!coords) {
-      alert('非法输入：请用 x,z;x,z 或 x,y,z;x,y,z 格式');
-      return;
-    }
-
-    if (importFormat === '点' && coords.length !== 1) {
-      alert('点模式只允许 1 个坐标');
-      return;
-    }
-    if (importFormat === '线' && coords.length < 2) {
-      alert('线模式至少需要 2 个坐标');
-      return;
-    }
-    if (importFormat === '面' && coords.length < 3) {
-      alert('面模式至少需要 3 个坐标');
-      return;
-    }
-
-    const mode: DrawMode =
-      importFormat === '点' ? 'point' :
-      importFormat === '线' ? 'polyline' : 'polygon';
-
-    const group = L.layerGroup();
-    const latlngs = coords.map(p => proj.locationToLatLng(p.x, 64, p.z));
-
-    if (mode === 'point') {
-      latlngs.forEach(ll => {
-        L.circleMarker(ll, { color, fillColor: color, radius: 6 }).addTo(group);
-      });
-    } else if (mode === 'polyline') {
-      L.polyline(latlngs, { color }).addTo(group);
-    } else {
-      L.polygon(latlngs, { color }).addTo(group);
-    }
-
-    const def = FORMAT_REGISTRY['默认'];
-    const featureInfoOut = def.buildFeatureInfo({
-      op: 'import',
-      mode,
-      coords,
-      values: {},
-      groups: {},
-      worldId: currentWorldId,
-      now: new Date(),
-    });
-
-    const id = nextLayerId.current++;
-    const newLayer: LayerType = {
-      id,
-      mode,
-      color,
-      coords,
-      visible: true,
-      leafletGroup: group,
-      jsonInfo: {
-        subType: '默认',
-        featureInfo: featureInfoOut,
-      },
-    };
-
-    setLayers(prev => {
-      const next = [...prev, newLayer];
-      syncFixedRoot(next, editingLayerId);
-      return next;
-    });
-
-    setImportText('');
-    setImportPanelOpen(false);
-    return;
-  }
-
-  // ========== 2) JSON（单类型：按 importFormat 指定 FeatureKey）==========
-  let parsed: any;
-  try {
-    parsed = JSON.parse(text);
-  } catch (e) {
-    alert('非法 JSON：' + e);
-    return;
-  }
-
-  if (!Array.isArray(parsed)) {
-    alert('JSON 必须是数组');
-    return;
-  }
-
-  const key = importFormat as unknown as FeatureKey;
-  const def = FORMAT_REGISTRY[key];
-  if (!def) {
-    alert('未知导入格式：' + importFormat);
-    return;
-  }
-
-  const newLayers: LayerType[] = [];
-
-  for (let i = 0; i < parsed.length; i++) {
-    const item = parsed[i];
-    const itemColor = randomColor();
-
-    const v = validateImportItemDetailed(def, item, { worldId: currentWorldId, strictSystemFields: true });
-    if (!v.ok) {
-      const parts: string[] = [];
-      if (v.missing.length > 0) parts.push(`无法导入，部分必填的附加信息为空：\n${formatMissingEntries(v.missing)}`);
-      if (v.structuralErrors.length > 0) parts.push(`结构错误：${v.structuralErrors.join('；')}`);
-      alert(`${def.label} 第 ${i + 1} 项导入失败：\n${parts.join('\n')}`);
-      return;
-    }
-
-    const mode = v.mode;
-    const coords = v.coords;
-    const hydrated = v.hydrated ?? def.hydrate(item);
-
-    const featureInfoOut = def.buildFeatureInfo({
-      op: 'import',
-      mode,
-      coords,
-      values: hydrated.values ?? {},
-      groups: hydrated.groups ?? {},
-      worldId: currentWorldId,
-      prevFeatureInfo: item,
-      now: new Date(),
-    });
-
-    const group = L.layerGroup();
-
-    const yForDisplay =
-      Number.isFinite(Number(item?.height)) ? Number(item.height)
-      : Number.isFinite(Number(item?.heightH)) ? Number(item.heightH)
-      : 64;
-
-    const latlngs = coords.map(p => proj.locationToLatLng(p.x, yForDisplay, p.z));
-
-    if (mode === 'point') {
-      latlngs.forEach(ll => {
-        L.circleMarker(ll, { color: itemColor, fillColor: itemColor, radius: 6 }).addTo(group);
-      });
-    } else if (mode === 'polyline') {
-      L.polyline(latlngs, { color: itemColor }).addTo(group);
-    } else {
-      L.polygon(latlngs, { color: itemColor }).addTo(group);
-    }
-
-    const id = nextLayerId.current++;
-    newLayers.push({
-      id,
-      mode,
-      color: itemColor,
-      coords,
-      visible: true,
-      leafletGroup: group,
-      jsonInfo: {
-        subType: key,
-        featureInfo: featureInfoOut,
-      },
-    });
-  }
-
-  setLayers(prev => {
-    const next = [...prev, ...newLayers];
-    syncFixedRoot(next, editingLayerId);
-    return next;
-  });
-
-  setImportText('');
-  setImportPanelOpen(false);
 };
 
 
@@ -1773,6 +2203,65 @@ const makeEmptyItem = (fields: any[]) => {
   return obj;
 };
 
+// 用于 tags UI：如果导入/历史数据里出现不在 TAG_KEY_OPTIONS 中的 tagKey，
+// 则统一回显为：tagKey=其他，tagKeyOther=原始 key。
+const TAG_KEY_VALUE_SET = new Set(TAG_KEY_OPTIONS.map((o) => o.value));
+
+const normalizeGroupInfoByDef = (def: any, groups: Record<string, any[]>) => {
+  if (!def?.groups || !groups) return groups;
+  let changed = false;
+  const next: Record<string, any[]> = { ...groups };
+
+  // tags：未知 key -> 其他
+  const hasTags = def.groups.some((g: any) => g.key === 'tags');
+  if (hasTags) {
+    const items = Array.isArray(groups.tags) ? groups.tags : [];
+    const mapped = items.map((it: any) => {
+      const rawKey = String(it?.tagKey ?? '').trim();
+      if (!rawKey) return it;
+      if (rawKey === TAG_KEY_OTHER) {
+        const other = String(it?.tagKeyOther ?? '').trim();
+        if (other !== String(it?.tagKeyOther ?? '')) {
+          changed = true;
+          return { ...it, tagKeyOther: other };
+        }
+        return it;
+      }
+      if (!TAG_KEY_VALUE_SET.has(rawKey)) {
+        changed = true;
+        return { ...it, tagKey: TAG_KEY_OTHER, tagKeyOther: rawKey };
+      }
+      return it;
+    });
+    if (mapped !== items) {
+      next.tags = mapped;
+    }
+  }
+
+  // extensions：确保 extType 缺省时有默认值；null 类型时清空 extValue
+  const hasExt = def.groups.some((g: any) => g.key === 'extensions');
+  if (hasExt) {
+    const items = Array.isArray(groups.extensions) ? groups.extensions : [];
+    const mapped = items.map((it: any) => {
+      const t = (it?.extType ?? EXT_VALUE_TYPE_TEXT) as string;
+      if (t !== it?.extType) {
+        changed = true;
+        return { ...it, extType: t, extValue: t === EXT_VALUE_TYPE_NULL ? '' : it?.extValue ?? '' };
+      }
+      if (t === EXT_VALUE_TYPE_NULL && String(it?.extValue ?? '').trim() !== '') {
+        changed = true;
+        return { ...it, extValue: '' };
+      }
+      return it;
+    });
+    if (mapped !== items) {
+      next.extensions = mapped;
+    }
+  }
+
+  return changed ? next : groups;
+};
+
 const renderDynamicExtraInfo = () => {
   const hasFields = Array.isArray(activeDef?.fields) && activeDef.fields.length > 0;
   const hasGroups = Array.isArray(activeDef?.groups) && activeDef.groups.length > 0;
@@ -1794,55 +2283,268 @@ const renderDynamicExtraInfo = () => {
         <div className="space-y-3">
           {activeDef.groups!.map((g: any) => {
             const items: any[] = (groupInfo?.[g.key] ?? []) as any[];
+            const safeItems = items;
+
+            // ---------- extensions Step A/B：按 extGroup 分区 + 值类型选择逻辑 ----------
+            const renderExtensionsGroup = () => {
+              const extItems: any[] = safeItems;
+              const byGroup = new Map<string, any[]>();
+              for (const it of extItems) {
+                const gg = String(it?.extGroup ?? '').trim() || '未命名';
+                if (!byGroup.has(gg)) byGroup.set(gg, []);
+                byGroup.get(gg)!.push(it);
+              }
+
+              const addGroup = () => {
+                const gg = newExtGroupInput.trim();
+                if (!gg) return;
+                const next = extItems.concat([
+                  {
+                    extGroup: gg,
+                    extKey: '',
+                    extType: EXT_VALUE_TYPE_TEXT,
+                    extValue: '',
+                  },
+                ]);
+                setGroupItems(g.key, next);
+                setNewExtGroupInput('');
+              };
+
+              const addFieldToGroup = (gg: string) => {
+                const next = extItems.concat([
+                  {
+                    extGroup: gg === '未命名' ? '' : gg,
+                    extKey: '',
+                    extType: EXT_VALUE_TYPE_TEXT,
+                    extValue: '',
+                  },
+                ]);
+                setGroupItems(g.key, next);
+              };
+
+              const deleteGroup = (gg: string) => {
+                const next = extItems.filter((it) => {
+                  const g2 = String(it?.extGroup ?? '').trim() || '未命名';
+                  return g2 !== gg;
+                });
+                setGroupItems(g.key, next);
+              };
+
+              const updateItem = (idxInAll: number, patch: Record<string, any>) => {
+                const next = extItems.slice();
+                const cur = { ...(next[idxInAll] ?? {}) };
+                const merged = { ...cur, ...patch };
+                // Step B：extType==null 时清空并禁用 extValue（UI 禁用在渲染里做）
+                if (merged.extType === EXT_VALUE_TYPE_NULL) merged.extValue = '';
+                next[idxInAll] = merged;
+                setGroupItems(g.key, next);
+              };
+
+              const removeItem = (idxInAll: number) => {
+                setGroupItems(g.key, extItems.filter((_, i) => i !== idxInAll));
+              };
+
+              // 为了在 grouped 渲染里能定位到“全局数组索引”，我们建立一次映射
+              const indexOfItem = new Map<any, number>();
+              extItems.forEach((it, i) => indexOfItem.set(it, i));
+
+              const sortedGroups = Array.from(byGroup.keys()).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 border p-1 rounded text-sm"
+                      placeholder="新增扩展组 extGroup（例如 poi / note）"
+                      value={newExtGroupInput}
+                      onChange={(e) => setNewExtGroupInput(e.target.value)}
+                    />
+                    <AppButton
+                      className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                      type="button"
+                      onClick={addGroup}
+                    >
+                      新增组
+                    </AppButton>
+                  </div>
+
+                  {sortedGroups.length === 0 ? (
+                    <div className="text-xs text-gray-500">暂无条目</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {sortedGroups.map((gg) => {
+                        const rows = byGroup.get(gg) ?? [];
+                        return (
+                          <div key={gg} className="border rounded p-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-semibold">{gg}</div>
+                              <div className="flex items-center gap-2">
+                                <AppButton
+                                  className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                                  type="button"
+                                  onClick={() => addFieldToGroup(gg)}
+                                >
+                                  添加字段
+                                </AppButton>
+                                <AppButton
+                                  className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                                  type="button"
+                                  onClick={() => deleteGroup(gg)}
+                                >
+                                  删除组
+                                </AppButton>
+                              </div>
+                            </div>
+
+                            {rows.length === 0 ? (
+                              <div className="text-xs text-gray-500">暂无字段</div>
+                            ) : (
+                              <div className="space-y-2">
+                                {rows.map((row) => {
+                                  const idxAll = indexOfItem.get(row) ?? -1;
+                                  const extType = String(row?.extType ?? EXT_VALUE_TYPE_TEXT);
+                                  const valueDisabled = extType === EXT_VALUE_TYPE_NULL;
+                                  return (
+                                    <div key={idxAll} className="border rounded p-2">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="text-xs font-semibold">#{idxAll + 1}</div>
+                                        <AppButton
+                                          className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                                          type="button"
+                                          onClick={() => removeItem(idxAll)}
+                                        >
+                                          删除
+                                        </AppButton>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                        <div>
+                                          <label className="block text-xs font-semibold mb-1">字段名(extKey)</label>
+                                          <input
+                                            type="text"
+                                            className="w-full border p-1 rounded"
+                                            value={row?.extKey ?? ''}
+                                            onChange={(e) => updateItem(idxAll, { extKey: e.target.value })}
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-xs font-semibold mb-1">值类型</label>
+                                          <select
+                                            className="w-full border p-1 rounded"
+                                            value={extType}
+                                            onChange={(e) => updateItem(idxAll, { extType: e.target.value })}
+                                          >
+                                            {EXT_VALUE_TYPE_OPTIONS.map((o) => (
+                                              <option key={o.value} value={o.value}>{o.label}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        <div className="sm:col-span-2">
+                                          <label className="block text-xs font-semibold mb-1">值(extValue)</label>
+                                          <input
+                                            type="text"
+                                            className={`w-full border p-1 rounded ${valueDisabled ? 'bg-gray-100 text-gray-400' : ''}`}
+                                            disabled={valueDisabled}
+                                            placeholder={valueDisabled ? 'null 类型无需填写' : '请输入'}
+                                            value={row?.extValue ?? ''}
+                                            onChange={(e) => updateItem(idxAll, { extValue: e.target.value })}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            };
 
             return (
               <div key={g.key} className="border rounded p-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-semibold">{g.label}</div>
-                  <AppButton
-                    className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
-                    onClick={() => setGroupItems(g.key, [...items, makeEmptyItem(g.fields)])}
-                    type="button"
-                  >
-                    {g.addButtonText ?? '添加'}
-                  </AppButton>
+                  {g.key === 'extensions' ? null : (
+                    <AppButton
+                      className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                      onClick={() => setGroupItems(g.key, [...safeItems, makeEmptyItem(g.fields)])}
+                      type="button"
+                    >
+                      {g.addButtonText ?? '添加'}
+                    </AppButton>
+                  )}
                 </div>
 
-                {items.length === 0 ? (
-                  <div className="text-xs text-gray-500">暂无条目</div>
+                {g.key === 'extensions' ? (
+                  renderExtensionsGroup()
                 ) : (
-                  <div className="space-y-2">
-                    {items.map((it, idx) => (
-                      <div key={idx} className="border rounded p-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs font-semibold">#{idx + 1}</div>
-                          <AppButton
-                            className="bg-red-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={() => setGroupItems(g.key, items.filter((_, i) => i !== idx))}
-                            type="button"
-                          >
-                            删除
-                          </AppButton>
-                        </div>
+                  safeItems.length === 0 ? (
+                    <div className="text-xs text-gray-500">暂无条目</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {safeItems.map((it, idx) => (
+                        <div key={idx} className="border rounded p-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold">#{idx + 1}</div>
+                            <AppButton
+                              className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                              onClick={() => setGroupItems(g.key, safeItems.filter((_, i) => i !== idx))}
+                              type="button"
+                            >
+                              删除
+                            </AppButton>
+                          </div>
 
-                        <div>
-                          {g.fields.map((f: any) =>
-                            renderField(
-                              f,
-                              it?.[f.key],
-                              (v) => {
-                                const nextItems = items.slice();
-                                const nextItem = { ...(nextItems[idx] ?? {}) };
-                                nextItem[f.key] = v;
-                                nextItems[idx] = nextItem;
-                                setGroupItems(g.key, nextItems);
+                          <div>
+                            {g.fields.map((f: any) => {
+                              // tags：仅当字段名=其他时显示 tagKeyOther
+                              if (g.key === 'tags' && f.key === 'tagKeyOther') {
+                                const k = String(it?.tagKey ?? '').trim();
+                                if (k !== TAG_KEY_OTHER) return null;
                               }
-                            )
-                          )}
+
+                              return renderField(
+                                f,
+                                it?.[f.key],
+                                (v) => {
+                                  const nextItems = safeItems.slice();
+                                  const nextItem = { ...(nextItems[idx] ?? {}) };
+
+                                  // tags：切换字段名时处理“其他字段名”联动
+                                  if (g.key === 'tags' && f.key === 'tagKey') {
+                                    const vv = String(v ?? '').trim();
+                                    nextItem.tagKey = vv;
+                                    if (vv !== TAG_KEY_OTHER) {
+                                      // 非“其他”：清空 tagKeyOther，避免一直显示/残留
+                                      nextItem.tagKeyOther = '';
+                                    } else {
+                                      // “其他”：如为空则保留用户已有输入
+                                      nextItem.tagKeyOther = String(nextItem.tagKeyOther ?? '').trim();
+                                    }
+                                    nextItems[idx] = nextItem;
+                                    setGroupItems(g.key, nextItems);
+                                    return;
+                                  }
+
+                                  nextItem[f.key] = v;
+                                  nextItems[idx] = nextItem;
+                                  setGroupItems(g.key, nextItems);
+                                },
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -1904,6 +2606,7 @@ const resetFeatureFormToDefault = () => {
 };
 
 const handleDrawModeButtonClick = (m: 'point' | 'polyline' | 'polygon') => {
+  if (guardTempMountReadonly()) return;
   requestSwitchWithExtraWarn(() => {
     const sameMode = drawMode === m;
 
@@ -1955,6 +2658,17 @@ const handleDrawModeButtonClick = (m: 'point' | 'polyline' | 'polygon') => {
 const workflowRegistry: WorkflowRegistry = {
   railway: RailwayWorkflow,
   station: StationWorkflow,
+  ngf_land: NaturalLandWorkflow,
+  ngf_lis: NaturalLandSurfaceWorkflow,
+  ngf_wtb: NaturalWaterbodyWorkflow,
+  ngf_wtr: NaturalWaterwayWorkflow,
+  ngf_bod: NaturalBoundaryWorkflow,
+  adm_dbz_set: SettlementBoundaryDeterminedWorkflow,
+  adm_plz_plan: SettlementBoundaryPlannedWorkflow,
+  adm_line_settlement: SettlementBoundaryLineWorkflow,
+  adm_point_special: SpecialCulturalPointWorkflow,
+  bud_building: BuildingWorkflow,
+  flr_unit: FloorUnitWorkflow,
 };
 
 const stopWorkflowToSelector = () => {
@@ -1973,6 +2687,7 @@ const stopWorkflowToSelector = () => {
 };
 
 const startWorkflow = () => {
+  if (guardTempMountReadonly()) return;
   if (workflowRunning) return;
 
   // 快捷模式下：开始工作流前重置草稿/临时输出（保持 fixed 不动）
@@ -2209,14 +2924,46 @@ const workflowBridge: WorkflowBridge = {
             </AppButton>
           </>
         ) : (
-          <AppButton
-            onClick={endMeasuringFromMenu}
-            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
-            type="button"
-          >
-            <X className="w-4 h-4" />
-            <span className="font-medium">结束测绘</span>
-          </AppButton>
+          <>
+            <AppButton
+              onClick={() => switchMeasuringVariantFromMenu('full')}
+              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                measuringVariant === 'full'
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'hover:bg-gray-50 text-gray-700'
+              }`}
+              type="button"
+              disabled={measuringVariant === 'full'}
+              title={measuringVariant === 'full' ? '当前已是完整模式' : '切换到完整测绘模式'}
+            >
+              <Pencil className="w-4 h-4" />
+              <span>切换到完整模式</span>
+            </AppButton>
+
+            <AppButton
+              onClick={() => switchMeasuringVariantFromMenu('workflow')}
+              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                measuringVariant === 'workflow'
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'hover:bg-gray-50 text-gray-700'
+              }`}
+              type="button"
+              disabled={measuringVariant === 'workflow'}
+              title={measuringVariant === 'workflow' ? '当前已是快捷模式' : '切换到快捷测绘模式'}
+            >
+              <Pencil className="w-4 h-4" />
+              <span>切换到快捷模式</span>
+            </AppButton>
+
+            <AppButton
+              onClick={endMeasuringFromMenu}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+              type="button"
+            >
+              <X className="w-4 h-4" />
+              <span className="font-medium">结束测绘</span>
+            </AppButton>
+          </>
         )}
 
         {/* 导入数据：仅开始测绘后显示 */}
@@ -2244,161 +2991,309 @@ const workflowBridge: WorkflowBridge = {
     </div>
   );
 
-  const isLayerListBusy = (drawing && drawMode !== 'none') || editingLayerId !== null;
-  const visibleLayers = layers.filter((l) => l.id !== editingLayerId);
+  // ======== 图层管理：临时挂载(全局)切换（存在即移除） ========
+  const toggleTempMountAllLayers = async (layerList: LayerType[], busy: boolean) => {
+    if (busy) return;
+    const ids = layerList.map((l) => l.id);
 
-  const layerPanelBody = (
-    <>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold text-sm text-gray-700">图层</h3>
+    // 已挂载：移除所有 layer-* 临时源，并恢复测绘图层显示（存在即移除）
+    if (tempMountAllActive) {
+      removeAllTempMountedLayersForWorld(ids);
+      setTempMountAllActive(false);
+      // 恢复 fixedRoot 显示（避免退出挂载后仍然空白）
+      syncFixedRoot(layers, editingLayerId);
+      return;
+    }
 
+    // 未挂载：先做“全局数据库（RULE_DATA_SOURCES 全文件）”ID 重复性检查
+    const candidates: TempLayerIdCandidate[] = layerList
+      .map((l) => ({
+        title: getLayerDisplayTitle(l),
+        id: getLayerPrimaryIdValue(l),
+      }))
+      .filter((c) => String(c.id ?? '').trim().length > 0);
+
+    let shown = false;
+    const timer = window.setTimeout(() => {
+      shown = true;
+      setTempMountIdCheckText('正在对比临时图层ID...');
+      setTempMountIdCheckOpen(true);
+    }, 1000);
+
+    try {
+      setTempMountIdCheckText('正在读取全局数据库要素索引...');
+      const messages = await checkTempMountIdConflicts({ worldId: currentWorldId, candidates });
+      if (messages.length > 0) {
+        // 若出现重复：弹窗提示并保持未挂载状态
+        if (shown) setTempMountIdCheckOpen(false);
+        window.alert(messages.join('\n'));
+        return;
+      }
+    } finally {
+      window.clearTimeout(timer);
+      if (shown) setTempMountIdCheckOpen(false);
+    }
+
+    // 通过检查：批量挂载所有图层（仅用于测试显示/去重/关联）
+    mountAllLayersToTempSources(layerList);
+    setTempMountAllActive(true);
+    // 挂载模式下仅观看：隐藏测绘图层显示，避免与规则渲染叠加
+    fixedRootRef.current?.clearLayers();
+  };
+
+  const layerPanelCard = (
+    <AppCard className="w-96 max-h-[70vh] overflow-hidden border">
+      {/* 标题栏（拖拽区域：前 48px） */}
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <h3 className="font-bold text-gray-800">图层</h3>
         <AppButton
+          onClick={closeMeasuringUI}
+          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+          aria-label="关闭"
+          title="退出测绘并清理"
           type="button"
-          className={`px-2 py-1 text-sm rounded border ${
-            isLayerListBusy || visibleLayers.length === 0
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
-              : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
-          }`}
-          title={
-            isLayerListBusy
-              ? '当前有要素正在编辑/绘制，无法整体导出'
-              : visibleLayers.length === 0
-                ? '暂无图层'
-                : '导出图层管理区全部图层 JSON'
-          }
-          disabled={isLayerListBusy || visibleLayers.length === 0}
-          onClick={() => {
-            if (isLayerListBusy || visibleLayers.length === 0) return;
-            setJsonPanelText(getAllLayersJSONOutput());
-            setJsonPanelOpen(true);
-          }}
         >
-          整体JSON
+          <X className="w-4 h-4" />
         </AppButton>
       </div>
 
-      {visibleLayers.map((l) => (
-        <div key={l.id} className="flex items-center gap-1 mb-1">
-          <AppButton
-            className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
-            onClick={() => toggleLayerVisible(l.id)}
-            type="button"
-          >
-            {l.visible ? '隐藏' : '显示'}
-          </AppButton>
+      {(() => {
+        const busy = (drawing && drawMode !== 'none') || editingLayerId !== null;
+        const visibleList = layers.filter((l) => l.id !== editingLayerId);
+        const hasDefaultLayer = visibleList.some((l) => (l?.jsonInfo?.subType ?? '默认') === '默认');
 
-          <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
-            ↑
-          </AppButton>
+        return (
+          <>
+            {/* 标题下按钮行：整体JSON + 临时挂载（全局） */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b">
+              <AppButton
+                type="button"
+                className={`px-2 py-1 text-sm rounded border ${
+                  busy || visibleList.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
+                    : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
+                }`}
+                title={
+                  busy
+                    ? '当前有要素正在编辑/绘制，无法整体导出'
+                    : visibleList.length === 0
+                      ? '暂无图层'
+                      : '导出图层管理区全部图层 JSON'
+                }
+                disabled={busy || visibleList.length === 0}
+                onClick={() => {
+                  if (busy || visibleList.length === 0) return;
+                  setJsonExportSubType('__ALL__');
+                  setJsonPanelText(getLayersJSONOutputBySubType('__ALL__'));
+                  setJsonPanelOpen(true);
+                }}
+              >
+                整体JSON
+              </AppButton>
 
-          <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
-            ↓
-          </AppButton>
+              <AppButton
+                type="button"
+                className={`px-2 py-1 text-sm rounded border ${
+                  busy || visibleList.length === 0 || hasDefaultLayer
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
+                    : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300'
+                }`}
+                title={
+                  busy
+                    ? '当前有要素正在编辑/绘制，无法导出'
+                    : visibleList.length === 0
+                      ? '暂无图层'
+                      : hasDefaultLayer
+                        ? '存在默认图层，无法导出简略CSV'
+                        : '导出 Type,Class,World,ID,Name 简略CSV（便于快速维护检查）'
+                }
+                disabled={busy || visibleList.length === 0 || hasDefaultLayer}
+                onClick={() => {
+                  if (busy || visibleList.length === 0 || hasDefaultLayer) return;
+                  const csv = buildBriefCsvFromLayers(visibleList, currentWorldId);
+                  const now = new Date();
+                  const y = String(now.getFullYear());
+                  const m = String(now.getMonth() + 1).padStart(2, '0');
+                  const d = String(now.getDate()).padStart(2, '0');
+                  const filename = `brief_${y}${m}${d}.csv`;
+                  downloadTextFile(csv, filename, 'text/csv;charset=utf-8');
+                }}
+              >
+                简略CSV文件
+              </AppButton>
 
-          <AppButton
-            className={`px-2 py-1 text-sm ${
-              isLayerListBusy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
-            }`}
-            disabled={isLayerListBusy}
-            onClick={() => {
-              if (isLayerListBusy) return;
-              editLayer(l.id);
-            }}
-            type="button"
-            title={isLayerListBusy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
-          >
-            编辑
-          </AppButton>
+              <AppButton
+                type="button"
+                className={`px-2 py-1 text-sm rounded border ${
+                  busy || visibleList.length === 0 || (!tempMountAllActive && hasDefaultLayer)
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200'
+                    : tempMountAllActive
+                      ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700'
+                      : 'bg-emerald-200 text-emerald-900 border-emerald-300 hover:bg-emerald-300'
+                }`}
+                title={
+                  busy
+                    ? '当前有要素正在编辑/绘制，请先保存'
+                    : visibleList.length === 0
+                      ? '暂无图层'
+                      : (!tempMountAllActive && hasDefaultLayer)
+                        ? '存在默认图层，无法挂载'
+                      : tempMountAllActive
+                        ? '取消临时挂载（存在即移除）'
+                        : '临时挂载所有图层到规则图层（用于测试显示/去重/关联）'
+                }
+                disabled={busy || visibleList.length === 0 || (!tempMountAllActive && hasDefaultLayer)}
+                onClick={() => void toggleTempMountAllLayers(visibleList, busy)}
+              >
+                {tempMountAllActive ? '取消临时挂载' : '临时挂载'}
+              </AppButton>
+            </div>
 
-          <AppButton className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
-            删除
-          </AppButton>
+            {/* 顶部横向滚动条：始终可见 */}
+            <div className="px-3 pt-2">
+              <div
+                ref={layerMgrTopXRef}
+                className="overflow-x-auto overflow-y-hidden h-3 rounded bg-gray-50 border"
+                title="左右滑动"
+              >
+                <div ref={layerMgrSpacerRef} className="h-1" />
+              </div>
+            </div>
 
-          <AppButton
-            className="px-3 py-1 text-sm bg-purple-400 text-white"
-            onClick={() => {
-              setJsonPanelText(getLayerJSONOutput(l));
-              setJsonPanelOpen(true);
-            }}
-            type="button"
-          >
-            JSON
-          </AppButton>
+            {/* 列表：纵向滚动 + 横向滚动（与顶部同步） */}
+            <div ref={layerMgrBodyRef} className="px-3 pb-3 max-h-[50vh] overflow-y-auto overflow-x-auto">
+              <div className="min-w-max">
+                {visibleList.map((l) => {
+                  const entry = getTempMountedEntryByLayer(l.id);
+                  const enabled = entry ? Boolean(entry.enabled) : false;
 
-          <div className="flex-1 text-sm truncate">
-            #{l.id} {l.mode} <span style={{ color: l.color }}>■</span>
-          </div>
-        </div>
-      ))}
-    </>
-  );
+                  // 挂载模式：仅显示 enabled 开关（true/false）与标题
+                  if (tempMountAllActive) {
+                    return (
+                      <div key={l.id} className="flex items-center gap-2 mb-1 whitespace-nowrap min-w-[520px]">
+                        <AppButton
+                          type="button"
+                          className={`px-2 py-1 text-sm rounded border ${
+                            enabled
+                              ? 'bg-emerald-600 text-white border-emerald-700'
+                              : 'bg-gray-200 text-gray-700 border-gray-300'
+                          }`}
+                          onClick={() => setTempMountedEnabledForLayer(l.id, !enabled)}
+                          title="作为规则图层开关：enabled=true/false"
+                        >
+                          {enabled ? 'enabled=true' : 'enabled=false'}
+                        </AppButton>
 
-  const layerPanelCardDesktop = (
-    <AppCard className={`w-80 overflow-hidden border ${layerPanelCollapsed ? '' : 'max-h-[70vh]'}`}>
-      <div className="flex items-center justify-between px-3 py-2 border-b">
-        <h3 className="font-bold text-gray-800 text-sm">测绘图层</h3>
-        <AppButton
-          type="button"
-          className="px-2 py-1 text-xs rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
-          onClick={() => setLayerPanelCollapsed((v) => !v)}
-        >
-          {layerPanelCollapsed ? '展开' : '缩小'}
-        </AppButton>
-      </div>
-      {!layerPanelCollapsed && (
-        <div className="p-3 overflow-y-auto max-h-[calc(70vh-40px)]">
-          {layerPanelBody}
-        </div>
-      )}
+                        <div className="flex-1 text-sm truncate">
+                          {getLayerDisplayTitle(l)}
+                          <span className="text-gray-400"> {String(l.jsonInfo?.subType ?? l.mode)}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // 普通模式：保留原图层管理能力（不再提供单图层“临时挂载”按钮）
+                  return (
+                    <div key={l.id} className="flex items-center gap-1 mb-1 whitespace-nowrap min-w-[640px]">
+                      <AppButton
+                        className={`px-2 py-1 text-sm ${l.visible ? 'bg-green-300' : 'bg-gray-300'}`}
+                        onClick={() => toggleLayerVisible(l.id)}
+                        type="button"
+                      >
+                        {l.visible ? '隐藏' : '显示'}
+                      </AppButton>
+
+                      <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerUp(l.id)} type="button">
+                        ↑
+                      </AppButton>
+
+                      <AppButton className="px-2 py-1 text-sm bg-blue-200" onClick={() => moveLayerDown(l.id)} type="button">
+                        ↓
+                      </AppButton>
+
+                      <AppButton
+                        className={`px-2 py-1 text-sm ${
+                          busy ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-300 hover:bg-yellow-400'
+                        }`}
+                        disabled={busy}
+                        onClick={() => {
+                          if (busy) return;
+                          editLayer(l.id);
+                        }}
+                        type="button"
+                        title={busy ? '当前有要素正在编辑/绘制，请先保存' : '编辑'}
+                      >
+                        编辑
+                      </AppButton>
+
+                      <AppButton className="px-2 py-1 text-sm bg-red-400 text-white" onClick={() => deleteLayer(l.id)} type="button">
+                        删除
+                      </AppButton>
+
+                      <AppButton
+                        className="px-3 py-1 text-sm bg-purple-400 text-white"
+                        onClick={() => {
+                          setJsonPanelText(getLayerJSONOutput(l));
+                          setJsonPanelOpen(true);
+                        }}
+                        type="button"
+                      >
+                        JSON
+                      </AppButton>
+
+                      <div className="flex-1 text-sm truncate">
+                        {getLayerDisplayTitle(l)}
+                        <span className="text-gray-400"> {String(l.jsonInfo?.subType ?? l.mode)}</span>
+                        <span style={{ color: l.color }} className="ml-1">■</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </AppCard>
   );
 
-  const layerPanelCardMobile = (
-    <AppCard className="w-full overflow-hidden border">
-      <div className="flex items-center justify-between px-3 py-2 border-b">
-        <h3 className="font-bold text-gray-800 text-sm">测绘图层</h3>
-        <AppButton
-          type="button"
-          className="px-2 py-1 text-xs rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
-          onClick={() => setLayerPanelCollapsed((v) => !v)}
-        >
-          {layerPanelCollapsed ? '展开' : '缩小'}
-        </AppButton>
-      </div>
-      {!layerPanelCollapsed && (
-        <div className="p-3 overflow-y-auto max-h-[60vh]">
-          {layerPanelBody}
-        </div>
-      )}
-    </AppCard>
-  );
 
-  const launcherNode = launcherSlot ? (
-    launcherSlot(launcherContent)
-  ) : (
-    <div className="hidden sm:block">
-      <div className="fixed top-4 right-4 z-[1001] flex flex-col gap-3 w-80">
-        <AppCard className="w-full p-3 overflow-visible">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-sm text-gray-700">工具</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            {launcherContent}
-          </div>
-        </AppCard>
-      </div>
+
+// 1) 启动按钮节点：允许被外部收纳，但不要影响其它面板渲染
+const launcherNode = launcherSlot ? (
+  launcherSlot(launcherContent)
+) : (
+  <div className="hidden sm:block">
+    <div className="fixed top-4 right-4 z-[1001]">
+      {launcherContent}
     </div>
-  );
+  </div>
+);
+
+// 2) 桌面端图层管理：仅在 measuringActive 时出现（与测绘主面板一致：可拖拽，关闭=退出测绘并清理）
+const layerManagerDesktopNode = measuringActive ? (
+  <div className="hidden sm:block">
+    <DraggablePanel id="measuring-layers" defaultPosition={{ x: 960, y: 360 }} zIndex={1790}>
+      {layerPanelCard}
+    </DraggablePanel>
+  </div>
+) : null;
+
+// 3) 合并输出：launcherSlot 只影响 launcher，不再“短路”图层管理
+const rightDockNode = (
+  <>
+    {launcherNode}
+    {layerManagerDesktopNode}
+  </>
+);
+
+
+
+
 
   return (
     <>
-      {launcherNode}
-
-      {measuringActive && (
-        <DraggablePanel id="measuring-layers" defaultPosition={{ x: 16, y: 120 }} zIndex={1750}>
-          {layerPanelCardDesktop}
-        </DraggablePanel>
-      )}
+      {rightDockNode}
 
       {/* =========================
           测绘菜单：桌面端（可拖拽）
@@ -2430,9 +3325,12 @@ const workflowBridge: WorkflowBridge = {
     {(['point', 'polyline', 'polygon'] as const).map((m) => (
       <AppButton
         key={m}
-        className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
+        className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''} ${
+          isTempMountReadonly ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
         onClick={() => handleDrawModeButtonClick(m)}
         type="button"
+        disabled={isTempMountReadonly}
       >
         {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
       </AppButton>
@@ -2448,12 +3346,23 @@ const workflowBridge: WorkflowBridge = {
     >
       <option value="railway">铁路</option>
       <option value="station">车站和站台</option>
+      <option value="ngf_land">自然要素-陆地</option>
+      <option value="ngf_lis">自然要素-陆面要素</option>
+      <option value="ngf_wtb">自然要素-水域</option>
+      <option value="ngf_wtr">自然要素-河道</option>
+      <option value="ngf_bod">自然要素-地理边界</option>
+      <option value="adm_dbz_set">聚落范围-确定范围</option>
+      <option value="adm_plz_plan">聚落范围-规划范围</option>
+      <option value="adm_line_settlement">聚落边界线要素</option>
+      <option value="adm_point_special">特殊人文点要素</option>
+      <option value="bud_building">建筑</option>
+      <option value="flr_unit">楼内单元</option>
     </select>
 
     <AppButton
-      className={`px-3 py-1 rounded border ${workflowRunning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+      className={`px-3 py-1 rounded border ${workflowRunning || isTempMountReadonly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
       type="button"
-      disabled={workflowRunning}
+      disabled={workflowRunning || isTempMountReadonly}
       onClick={startWorkflow}
     >
       开始
@@ -2486,9 +3395,10 @@ onChange={(e) => {
       resetSpecialDrafts();
 
       setSubType(next);
-      const hydrated = FORMAT_REGISTRY[next].hydrate({});
+      const def = FORMAT_REGISTRY[next];
+      const hydrated = def.hydrate({});
       setFeatureInfo(hydrated.values ?? {});
-      setGroupInfo(hydrated.groups ?? {});
+      setGroupInfo(normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any));
     });
   });
 }}
@@ -2529,9 +3439,12 @@ onChange={(e) => {
 
     {measuringVariant === 'full' && (
       <AppButton
-        className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1"
+        className={`px-3 py-1 rounded-lg flex-1 ${
+          isTempMountReadonly ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-green-500 text-white'
+        }`}
         onClick={finishLayer}
         type="button"
+        disabled={isTempMountReadonly}
       >
         {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
       </AppButton>
@@ -2580,12 +3493,49 @@ onChange={(e) => {
   <GridSnapModeSwitch />
 </div>
 
-{/* 手动输入：不经过网格化再修正，仅允许整数或 .5 */}
-<ManualPointInput
-  enabled={measuringActive && drawing && drawMode !== 'none' && !showDraftControlPointsLocked}
-  defaultY={-64}
-  onSubmit={onManualPointSubmit}
-/>
+{/* 手动输入 & 曲线输入：同一行并平分空间 */}
+<div className="flex gap-2 mb-2">
+  <ManualPointInput
+    enabled={measuringActive && drawing && drawMode !== 'none' && !showDraftControlPointsLocked && !drawClickSuppressed && !curveInputFrozen}
+    activeMode={drawMode}
+    defaultY={-64}
+    onSubmit={onManualPointSubmit}
+    outerClassName="flex-1"
+  />
+
+  <CurveInputT
+    ref={curveInputTRef}
+    enabled={measuringActive && drawing && (drawMode === 'polyline' || drawMode === 'polygon') && !showDraftControlPointsLocked}
+    externallySuppressed={drawClickSuppressed || curveInputFrozen}
+    mapReady={mapReady}
+    leafletMapRef={leafletMapRef}
+    projectionRef={projectionRef}
+    activeMode={drawMode}
+    outerClassName="flex-1"
+    // 曲线输入开启时：完全冻结主绘制/编辑交互（不影响 ControlPointsT 的抑制状态）
+    onSetDrawClickSuppressed={(v) => setCurveInputFrozenImmediate(v)}
+    filterWorldPointByAssistLine={(p) => {
+      const assist = assistLineToolsRef.current;
+      if (assist?.isEnabled?.()) {
+        const r = assist.transformWorldPoint(p);
+        return r?.point ?? p;
+      }
+      return p;
+    }}
+    onCommitPoints={(points) => {
+      if (!Array.isArray(points) || points.length === 0) return;
+
+      setRedoStack([]);
+      setTempPoints((prev) => {
+        const updated = [...prev, ...points];
+        drawDraftGeometry(updated, drawMode, drawColor);
+        const last = updated[updated.length - 1];
+        if (last) updateLatestEndpointMarker({ x: last.x, z: last.z }, drawColor);
+        return updated;
+      });
+    }}
+  />
+</div>
 
 
 {/* 辅助线 */}
@@ -2817,9 +3767,12 @@ onChange={(e) => {
   {(['point', 'polyline', 'polygon'] as const).map((m) => (
     <AppButton
       key={m}
-      className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''}`}
+      className={`flex-1 py-1 border ${drawMode === m ? 'bg-blue-300' : ''} ${
+        isTempMountReadonly ? 'opacity-50 cursor-not-allowed' : ''
+      }`}
       onClick={() => handleDrawModeButtonClick(m)}
       type="button"
+      disabled={isTempMountReadonly}
     >
       {m === 'point' ? '点' : m === 'polyline' ? '线' : '面'}
     </AppButton>
@@ -2838,9 +3791,10 @@ onChange={(e) => {
   requestSwitchWithExtraWarn(() => {
     setSubType(next);
 
-    const hydrated = FORMAT_REGISTRY[next].hydrate({});
+    const def = FORMAT_REGISTRY[next];
+    const hydrated = def.hydrate({});
     setFeatureInfo(hydrated.values ?? {});
-    setGroupInfo(hydrated.groups ?? {});
+    setGroupInfo(normalizeGroupInfoByDef(def, (hydrated.groups ?? {}) as any));
   });
 }}
 
@@ -2879,9 +3833,12 @@ onChange={(e) => {
 
     {measuringVariant === 'full' && (
       <AppButton
-        className="bg-green-500 text-white px-3 py-1 rounded-lg flex-1"
+        className={`px-3 py-1 rounded-lg flex-1 ${
+          isTempMountReadonly ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-green-500 text-white'
+        }`}
         onClick={finishLayer}
         type="button"
+        disabled={isTempMountReadonly}
       >
         {editingLayerId !== null ? '保存编辑图层' : '完成当前图层'}
       </AppButton>
@@ -3105,42 +4062,16 @@ onChange={(e) => {
               </div>
 
               <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
-                <label className="block text-sm font-bold mb-1">格式</label>
-                <select
-                  value={importFormat}
-                  onChange={(e) => setImportFormat(e.target.value as ImportFormat)}
-                  className="w-full border p-2 rounded"
-                >
-<option value="点">点</option>
-<option value="线">线</option>
-<option value="面">面</option>
-<option value="批量">批量</option>
-<option value="车站">车站</option>
-<option value="铁路">铁路</option>
-<option value="站台">站台</option>
-<option value="站台轮廓">站台轮廓</option>
-<option value="车站建筑">车站建筑</option>
-<option value="车站建筑点">车站建筑点</option>
-<option value="车站建筑楼层">车站建筑楼层</option>
-<option value="地物点">地物点</option>
-<option value="地物线">地物线</option>
-<option value="地物面">地物面</option>
-<option value="建筑">建筑</option>
-<option value="建筑楼层">建筑楼层</option>
-                </select>
+                <div className="text-sm font-bold">格式</div>
+                <div className="text-xs text-gray-600">批量（JSON）</div>
+
 
                 <label className="block text-sm font-bold mb-1">数据输入</label>
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                   className="w-full border rounded p-2 text-sm"
-placeholder={
-  importFormat === '点' || importFormat === '线' || importFormat === '面'
-    ? '坐标文本：x,z;x,z 或 x,y,z;x,y,z'
-    : importFormat === '批量'
-      ? '批量 JSON：支持数组或 {items:[...]} / {features:[...]}。每条必须是“新规范 JSON”(含 Type/Class/World)，且 Class 必须可映射到已支持格式。'
-      : '单类型 JSON：数组，每条为该格式的 featureInfo 对象'
-}
+placeholder={'批量 JSON：支持数组或 {items:[...]} / {features:[...]}。也允许多条对象粘贴但外层未包 []（例如 {..},{..} 或 换行分隔）。\n每条必须是“新规范 JSON”(含 Type/Class/World)，且 Class 必须可映射到已支持格式。'}
                   rows={6}
                 />
 
@@ -3171,29 +4102,9 @@ placeholder={
             </div>
 
             <div className="p-4 space-y-3">
-              <label className="block text-sm font-bold mb-1">格式</label>
-              <select
-                value={importFormat}
-                onChange={(e) => setImportFormat(e.target.value as ImportFormat)}
-                className="w-full border p-2 rounded"
-              >
-<option value="点">点</option>
-<option value="线">线</option>
-<option value="面">面</option>
-<option value="批量">批量</option>
-<option value="车站">车站</option>
-<option value="铁路">铁路</option>
-<option value="站台">站台</option>
-<option value="站台轮廓">站台轮廓</option>
-<option value="车站建筑">车站建筑</option>
-<option value="车站建筑点">车站建筑点</option>
-<option value="车站建筑楼层">车站建筑楼层</option>
-<option value="地物点">地物点</option>
-<option value="地物线">地物线</option>
-<option value="地物面">地物面</option>
-<option value="建筑">建筑</option>
-<option value="建筑楼层">建筑楼层</option>
-              </select>
+              <div className="text-sm font-bold">格式</div>
+                <div className="text-xs text-gray-600">批量（JSON）</div>
+
 
               <label className="block text-sm font-bold mb-1">数据输入</label>
               <textarea
@@ -3214,7 +4125,7 @@ placeholder={
       {/* ======== 图层控制器（手机端） ======== */}
       {measuringActive && (
         <div className="sm:hidden fixed top-20 right-2 left-2 z-[1000]">
-          {layerPanelCardMobile}
+          {layerPanelCard}
         </div>
       )}
 
@@ -3236,48 +4147,142 @@ placeholder={
         </AppButton>
       </div>
 
-      <div className="p-3 space-y-2">
-        <textarea
-          readOnly
-          className="w-full h-64 border p-2 text-xs font-mono rounded"
-          value={jsonPanelText}
-        />
+      <div className="p-3 flex gap-3">
+        {/* 左侧：按要素类型分区导出 */}
+        <div className="w-28 shrink-0 border rounded p-2 bg-gray-50 max-h-[50vh] overflow-y-auto">
+          <div className="text-xs text-gray-500 mb-2">导出范围</div>
+          <div className="space-y-1">
+            <AppButton
+              type="button"
+              className={`w-full px-2 py-1 text-sm rounded border ${
+                jsonExportSubType === '__ALL__'
+                  ? 'bg-blue-600 text-white border-blue-700'
+                  : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+              }`}
+              onClick={() => {
+                setJsonExportSubType('__ALL__');
+                setJsonPanelText(getLayersJSONOutputBySubType('__ALL__'));
+              }}
+            >
+              全部
+            </AppButton>
+            {getAvailableSubTypes().map((k) => (
+              <AppButton
+                key={k}
+                type="button"
+                className={`w-full px-2 py-1 text-sm rounded border ${
+                  jsonExportSubType === k
+                    ? 'bg-blue-600 text-white border-blue-700'
+                    : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+                }`}
+                onClick={() => {
+                  setJsonExportSubType(k);
+                  setJsonPanelText(getLayersJSONOutputBySubType(k));
+                }}
+              >
+                {k}
+              </AppButton>
+            ))}
+            {getAvailableWorkflowCatalogKeys().length > 0 && (
+              <>
+                <div className="mt-3 pt-2 border-t border-black/10 text-xs text-black/60">
+                  按目录（WORKFLOW_FEATURE_CATALOG）
+                </div>
+                {getAvailableWorkflowCatalogKeys().map((it) => (
+                  <AppButton
+                    key={it.key}
+                    type="button"
+                    className={`w-full px-2 py-1 text-sm rounded border ${
+                      jsonExportSubType === it.key
+                        ? 'bg-blue-600 text-white border-blue-700'
+                        : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    onClick={() => {
+                      setJsonExportSubType(it.key);
+                      setJsonPanelText(getLayersJSONOutputByWorkflowCatalogKey(it.key));
+                    }}
+                  >
+                    {it.label}
+                  </AppButton>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
 
-        <div className="flex gap-2">
-          <AppButton
-            className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg"
-            onClick={async () => {
-              const text = jsonPanelText ?? '';
-              try {
-                await navigator.clipboard.writeText(text);
-              } catch {
-                // fallback
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
+        {/* 右侧：内容 + 操作 */}
+        <div className="flex-1 space-y-2">
+          <textarea
+            readOnly
+            className="w-full h-64 border p-2 text-xs font-mono rounded"
+            value={jsonPanelText}
+          />
+
+          <div className="flex gap-2">
+            <AppButton
+              className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg"
+              onClick={async () => {
+                const text = jsonPanelText ?? '';
                 try {
-                  document.execCommand('copy');
-                } finally {
-                  document.body.removeChild(ta);
+                  await navigator.clipboard.writeText(text);
+                } catch {
+                  // fallback
+                  const ta = document.createElement('textarea');
+                  ta.value = text;
+                  ta.style.position = 'fixed';
+                  ta.style.left = '-9999px';
+                  document.body.appendChild(ta);
+                  ta.focus();
+                  ta.select();
+                  try {
+                    document.execCommand('copy');
+                  } finally {
+                    document.body.removeChild(ta);
+                  }
                 }
-              }
-            }}
-            type="button"
-          >
-            复制
-          </AppButton>
+              }}
+              type="button"
+            >
+              复制
+            </AppButton>
 
-          <AppButton
-            className="flex-1 bg-gray-200 text-gray-800 px-3 py-2 rounded-lg"
-            onClick={() => setJsonPanelOpen(false)}
-            type="button"
-          >
-            关闭
-          </AppButton>
+            <AppButton
+              className="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg"
+              onClick={() => {
+                const text = jsonPanelText ?? '';
+                const now = new Date();
+                const y = String(now.getFullYear());
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                const name = jsonExportSubType === '__ALL__' ? 'ALL' : String(jsonExportSubType);
+                const filename = `${name}_${y}${m}${d}.json`;
+                try {
+                  const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch {
+                  // ignore
+                }
+              }}
+              type="button"
+            >
+              下载
+            </AppButton>
+
+            <AppButton
+              className="flex-1 bg-gray-200 text-gray-800 px-3 py-2 rounded-lg"
+              onClick={() => setJsonPanelOpen(false)}
+              type="button"
+            >
+              关闭
+            </AppButton>
+          </div>
         </div>
       </div>
     </AppCard>
@@ -3313,6 +4318,20 @@ placeholder={
   </div>
 )}
 
+{tempMountIdCheckOpen && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+    <AppCard className="w-[420px] max-w-[90vw] border">
+      <div className="px-4 py-3 border-b font-bold text-sm">加载中</div>
+      <div className="px-4 py-3 text-sm text-gray-800">{tempMountIdCheckText}</div>
+      <div className="px-4 py-3 border-t">
+        <div className="h-2 bg-gray-200 rounded overflow-hidden">
+          <div className="h-2 bg-blue-600 rounded animate-pulse" style={{ width: '60%' }} />
+        </div>
+      </div>
+    </AppCard>
+  </div>
+)}
+
 {endMeasuringWarnOpen && (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
     <AppCard className="w-[420px] max-w-[90vw] border">
@@ -3343,4 +4362,6 @@ placeholder={
 
   </>
 );
-}
+});
+
+export default MeasuringModule;
